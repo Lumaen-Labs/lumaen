@@ -16,11 +16,6 @@ pub mod access_registry {
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let registry = &mut ctx.accounts.registry;
         registry.authority = ctx.accounts.authority.key();
-
-        msg!(
-            "Access registry initialized with authority: {}",
-            ctx.accounts.authority.key()
-        );
         Ok(())
     }
 
