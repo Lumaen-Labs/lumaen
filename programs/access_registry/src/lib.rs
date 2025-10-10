@@ -3,10 +3,9 @@ use anchor_lang::solana_program::keccak;
 
 declare_id!("3AsHpu3rrzQjx1gTAWUKyiqaFj6HdSUFovLEhXpP2Ufv");
 
-pub const ANCHOR_DISCRIMINATOR_SIZE: usize = 8;
-
 // Role definitions
 pub const ADMIN_ROLE: &[u8] = b"ADMIN_ROLE";
+pub const ANCHOR_DISCRIMINATOR_SIZE: usize = 8;
 
 #[program]
 pub mod access_registry {

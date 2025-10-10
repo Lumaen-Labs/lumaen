@@ -1,7 +1,5 @@
 use anchor_lang::prelude::*;
-use switchboard_on_demand::{
-    default_queue, Instructions, QueueAccountData, QuoteVerifier, SlotHashes,
-};
+use switchboard_on_demand::{default_queue, Instructions, SlotHashes};
 switchboard_on_demand::switchboard_anchor_bindings!();
 
 declare_id!("3AsHpu3rrzQjx1gTAWUKyiqaFj6HdSUFovLEhXpP2Ufv");
@@ -40,10 +38,24 @@ pub mod pricer {
 
         // Get the first feed's price
         let feed = &feeds[0];
-        let price_f64 = feed.value();
+        let price_decimal = feed.value();
 
-        // Convert to i128 with 18 decimal precision
-        let price = price_f64 as i128;
+        // Convert Decimal to i128 with proper scaling
+        // Decimal has mantissa and scale - we need to scale to 18 decimals
+        let mantissa = price_decimal.mantissa();
+        let scale = price_decimal.scale();
+
+        // Scale to 18 decimals: mantissa * 10^(18 - scale)
+        let price = if scale <= 18 {
+            mantissa
+                .checked_mul(10i128.pow((18 - scale) as u32))
+                .ok_or(ErrorCode::MathOverflow)?
+        } else {
+            mantissa
+                .checked_div(10i128.pow((scale - 18) as u32))
+                .ok_or(ErrorCode::MathOverflow)?
+        };
+
         let final_price = if price == 0 { DEFAULT_PRICE } else { price };
 
         msg!("Asset base price: {}", final_price);
@@ -65,8 +77,23 @@ pub mod pricer {
         require!(!feeds.is_empty(), ErrorCode::NoFeedsAvailable);
 
         let feed = &feeds[0];
-        let price_f64 = feed.value();
-        let price = price_f64 as i128;
+        let price_decimal = feed.value();
+
+        // Convert Decimal to i128 with proper scaling
+        let mantissa = price_decimal.mantissa();
+        let scale = price_decimal.scale();
+
+        // Scale to 18 decimals: mantissa * 10^(18 - scale)
+        let price = if scale <= 18 {
+            mantissa
+                .checked_mul(10i128.pow((18 - scale) as u32))
+                .ok_or(ErrorCode::MathOverflow)?
+        } else {
+            mantissa
+                .checked_div(10i128.pow((scale - 18) as u32))
+                .ok_or(ErrorCode::MathOverflow)?
+        };
+
         let final_price = if price == 0 { DEFAULT_PRICE } else { price };
 
         let value = (amount as i128)
@@ -94,8 +121,23 @@ pub mod pricer {
         require!(!feeds.is_empty(), ErrorCode::NoFeedsAvailable);
 
         let feed = &feeds[0];
-        let price_f64 = feed.value();
-        let price = price_f64 as i128;
+        let price_decimal = feed.value();
+
+        // Convert Decimal to i128 with proper scaling
+        let mantissa = price_decimal.mantissa();
+        let scale = price_decimal.scale();
+
+        // Scale to 18 decimals: mantissa * 10^(18 - scale)
+        let price = if scale <= 18 {
+            mantissa
+                .checked_mul(10i128.pow((18 - scale) as u32))
+                .ok_or(ErrorCode::MathOverflow)?
+        } else {
+            mantissa
+                .checked_div(10i128.pow((scale - 18) as u32))
+                .ok_or(ErrorCode::MathOverflow)?
+        };
+
         let final_price = if price == 0 { DEFAULT_PRICE } else { price };
 
         let amount = (value as i128)
