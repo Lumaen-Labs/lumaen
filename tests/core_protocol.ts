@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { CoreProtocol } from "../target/types/core_protocol";
+import { CoreProtocol`` } from "../target/types/core_protocol";
 
 describe("core_protocol", () => {
   // Configure the client to use the local cluster.

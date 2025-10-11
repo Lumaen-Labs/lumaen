@@ -4,7 +4,7 @@ use anchor_lang::solana_program::keccak;
 declare_id!("3AsHpu3rrzQjx1gTAWUKyiqaFj6HdSUFovLEhXpP2Ufv");
 
 // Role definitions
-pub const ADMIN_ROLE: &[u8] = b"ADMIN_ROLE";
+pub const ADMIN_ROLE: u8 = 1;
 pub const ANCHOR_DISCRIMINATOR_SIZE: usize = 8;
 
 #[program]
@@ -19,7 +19,7 @@ pub mod access_registry {
     }
 
     /// Grant a role to an address
-    pub fn grant_role(ctx: Context<GrantRole>, role: Vec<u8>) -> Result<()> {
+    pub fn grant_role(ctx: Context<GrantRole>, role: u8) -> Result<()> {
         let role_account = &mut ctx.accounts.role_account;
         role_account.role = role.clone();
         role_account.account = ctx.accounts.target.key();
@@ -202,8 +202,7 @@ pub struct Registry {
 #[account]
 #[derive(InitSpace)]
 pub struct RoleAccount {
-    #[max_len(32)]
-    pub role: Vec<u8>,
+    pub role: u8,
     pub account: Pubkey,
     pub granted_by: Pubkey,
 }
@@ -219,7 +218,7 @@ pub enum AccessError {
 #[event]
 #[derive(Debug)]
 pub struct RoleGranted {
-    pub role: Vec<u8>,
+    pub role: u8,
     pub account: Pubkey,
     pub granted_by: Pubkey,
 }
@@ -227,7 +226,7 @@ pub struct RoleGranted {
 #[event]
 #[derive(Debug)]
 pub struct RoleRevoked {
-    pub role: Vec<u8>,
+    pub role: u8,
     pub account: Pubkey,
     pub revoked_by: Pubkey,
 }
@@ -235,7 +234,7 @@ pub struct RoleRevoked {
 #[event]
 #[derive(Debug)]
 pub struct RoleRenounced {
-    pub role: Vec<u8>,
+    pub role: u8,
     pub account: Pubkey,
     pub renounced_by: Pubkey,
 }
@@ -243,7 +242,7 @@ pub struct RoleRenounced {
 #[event]
 #[derive(Debug)]
 pub struct RoleAuthorityTransferred {
-    pub role: Vec<u8>,
+    pub role: u8,
     pub account: Pubkey,
     pub authority: Pubkey,
 }
