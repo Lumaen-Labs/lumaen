@@ -46,11 +46,9 @@ pub mod router {
         Ok(())
     }
 
-    // return type should be amount
     pub fn repay_loan(ctx: Context<RepayLoan>) -> Result<AssetReleased> {
         Ok(())
     }
-    // return type should be
 
     pub fn spend_loan(ctx: Context<SpendLoan>) -> Result<LoanSpent> {
         Ok(())
