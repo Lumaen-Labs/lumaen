@@ -249,8 +249,6 @@
 //     pub authority: Pubkey,
 // }
 
-
-
 use anchor_lang::prelude::*;
 
 declare_id!("3AsHpu3rrzQjx1gTAWUKyiqaFj6HdSUFovLEhXpP2Ufv");

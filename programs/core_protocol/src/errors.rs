@@ -1,4 +1,3 @@
-
 use anchor_lang::prelude::*;
 
 #[error_code]
@@ -26,5 +25,5 @@ pub enum LendingError {
     #[msg("Withdraw exceeds daily limit (20% of reserves)")]
     WithdrawLimitExceeded,
     #[msg("Unauthorized")]
-    Unauthorized
+    Unauthorized,
 }
