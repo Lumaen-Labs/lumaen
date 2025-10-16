@@ -1,7 +1,6 @@
 use crate::constants::ANCHOR_DISCRIMINATOR_SIZE;
-use crate::state::{Market, UserPosition};
+use crate::state::UserPosition;
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 // ============================================================================
 // INSTRUCTION 3: Create User Token Accounts (Separate for flexibility)
@@ -14,7 +13,7 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 // Create rToken account (for depositors/suppliers)
 #[derive(Accounts)]
 #[instruction(market_mint:Pubkey)]
-pub struct InitializeUserAccount<'info> {
+pub struct InitializeUserPosition<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
@@ -52,8 +51,8 @@ pub struct InitializeUserAccount<'info> {
     pub system_program: Program<'info, System>, // pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handler_initialize_user_rtoken_account(
-    ctx: Context<InitializeUserAccount>,
+pub fn handler_initialize_user_position(
+    ctx: Context<InitializeUserPosition>,
     market_mint: Pubkey,
 ) -> Result<()> {
     let user_account = &mut ctx.accounts.user_account;

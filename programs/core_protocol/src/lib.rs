@@ -1,41 +1,48 @@
 use anchor_lang::prelude::*;
-
-declare_id!("3AsHpu3rrzQjx1gTAWUKyiqaFj6HdSUFovLEhXpP2Ufv");
-
-pub mod constants;
-pub mod errors;
-pub mod events;
-pub mod initialization;
-pub mod instructions;
-pub mod state;
-
 use initialization::*;
 use instructions::*;
+use state::MarketConfig;
+
+mod constants;
+mod errors;
+mod events;
+mod initialization;
+mod instructions;
+mod state;
+
+
+declare_id!("7igW79sx9a5aR6XJJve8Uj8QJNrLg1K4A8RqiLZKK9fL");
+
 
 #[program]
-pub mod router {
+pub mod core_router {
     use super::*;
 
-    // return type should be shares
+    // Deposit tokens and receive shares in return
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<u64> {
-        instructions::deposit_handler(ctx, amount)
+        deposit_handler(ctx, amount)
     }
 
-    pub fn withdraw(ctx: Context<Withdraw>, shares: u64) -> Result<u64> {
-        instruction::withdraw_handler(ctx, shares)
+    // Withdraw tokens by burning shares
+    pub fn withdraw(ctx: Context<Withdraw>, shares: u64) -> Result<()> {
+        withdraw_handler(ctx, shares)
     }
 
+    // Initialize the protocol state
     pub fn initialize_protocol(ctx: Context<InitializeProtocol>) -> Result<()> {
-        initialization::handler_initialize_protocol(ctx)
-    }
-    pub fn initialize_market(ctx: Context<InitializeMarket>, config: MarketConfig) -> Result<()> {
-        initialization::handler_initialize_market(ctx, config)
+        handler_initialize_protocol(ctx)
     }
 
+    // Initialize a new market
+    pub fn initialize_market(ctx: Context<InitializeMarket>, config: MarketConfig) -> Result<()> {
+        handler_initialize_market(ctx, config)
+    }
+
+    // Initialize user position account
     pub fn initialize_user_position(
-        ctx: Context<InitializeUserRTokenAccount>,
+        ctx: Context<InitializeUserPosition>,
         market_mint: Pubkey,
     ) -> Result<()> {
-        initialization::handler_initialize_user_rtoken_account(ctx)
+        handler_initialize_user_position(ctx, market_mint)
     }
 }

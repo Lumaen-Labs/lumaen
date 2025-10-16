@@ -81,7 +81,7 @@ pub struct UserPosition {
 
 impl UserPosition {
     pub fn free_rtokens(&self) -> u64 {
-        self.deposited_shares.checked_sub(self.locked_collateral)
+        self.deposited_shares.checked_sub(self.locked_collateral).expect("ShutUp")
     }
 }
 
@@ -123,3 +123,32 @@ impl UserPosition {
 //     Repaid,      // Loan fully repaid
 //     Liquidated,  // Loan was liquidated
 // }
+
+
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct MarketConfig {
+    // Risk parameters
+    pub max_ltv: u64,               // e.g., 7500 = 75%
+    pub liquidation_threshold: u64, // e.g., 8000 = 80%
+    pub liquidation_penalty: u64,   // e.g., 500 = 5%
+    pub reserve_factor: u64,        // e.g., 1000 = 10%
+
+    // Limits
+    pub min_deposit_amount: u64,
+    pub max_deposit_amount: u64,
+    pub min_borrow_amount: u64,
+    pub max_borrow_amount: u64,
+
+    // Fees (basis points)
+    pub deposit_fee: u64, // e.g., 10 = 0.1%
+    pub withdraw_fee: u64,
+    pub borrow_fee: u64,
+    pub repay_fee: u64,
+    // Interest rate model
+    // pub base_rate: u64,                  // e.g., 200 = 2%
+    // pub optimal_utilization: u64,        // e.g., 8000 = 80%
+    // pub slope1: u64,                     // e.g., 400 = 4%
+    // pub slope2: u64,                     // e.g., 7500 = 75%
+}
+

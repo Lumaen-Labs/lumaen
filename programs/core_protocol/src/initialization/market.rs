@@ -1,6 +1,6 @@
 use crate::constants::{ANCHOR_DISCRIMINATOR_SIZE, PRECISION};
 use crate::errors::LendingError;
-use crate::state::{Market, ProtocolState};
+use crate::state::{Market, ProtocolState,MarketConfig};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
@@ -67,32 +67,6 @@ pub struct InitializeMarket<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
     // pub rent: Sysvar<'info, Rent>,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct MarketConfig {
-    // Risk parameters
-    pub max_ltv: u64,               // e.g., 7500 = 75%
-    pub liquidation_threshold: u64, // e.g., 8000 = 80%
-    pub liquidation_penalty: u64,   // e.g., 500 = 5%
-    pub reserve_factor: u64,        // e.g., 1000 = 10%
-
-    // Limits
-    pub min_deposit_amount: u64,
-    pub max_deposit_amount: u64,
-    pub min_borrow_amount: u64,
-    pub max_borrow_amount: u64,
-
-    // Fees (basis points)
-    pub deposit_fee: u64, // e.g., 10 = 0.1%
-    pub withdraw_fee: u64,
-    pub borrow_fee: u64,
-    pub repay_fee: u64,
-    // Interest rate model
-    // pub base_rate: u64,                  // e.g., 200 = 2%
-    // pub optimal_utilization: u64,        // e.g., 8000 = 80%
-    // pub slope1: u64,                     // e.g., 400 = 4%
-    // pub slope2: u64,                     // e.g., 7500 = 75%
 }
 
 pub fn handler_initialize_market(

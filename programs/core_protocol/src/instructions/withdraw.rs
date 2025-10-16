@@ -2,7 +2,11 @@ use crate::constants::*;
 use crate::errors::*;
 use crate::state::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token_interface::{
+    self, Burn, Mint, TokenAccount, TokenInterface, TransferChecked,
+};
+use crate::instructions::helper::*;
 
 // ============================================================================
 // INSTRUCTION 2: WITHDRAW
@@ -81,6 +85,7 @@ pub struct Withdraw<'info> {
         associated_token::token_program = token_program,
     )]
     pub user_token_account: InterfaceAccount<'info, TokenAccount>,
+
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -93,8 +98,8 @@ pub struct Withdraw<'info> {
     // pub token_program: Program<'info, Token>,
 }
 
-pub fn handler_withdraw(ctx: Context<Withdraw>, rtoken_amount: u64) -> Result<()> {
-    let market = &mut ctx.accounts.market;
+pub fn withdraw_handler(ctx: Context<Withdraw>, rtoken_amount: u64) -> Result<()> {
+    // let market = &mut ctx.accounts.market;
     let user_position = &mut ctx.accounts.user_position;
     let clock = Clock::get()?;
 
@@ -110,13 +115,13 @@ pub fn handler_withdraw(ctx: Context<Withdraw>, rtoken_amount: u64) -> Result<()
     // ========================================================================
     // STEP 2: Accrue interest
     // ========================================================================
-    accrue_interest(market, clock.unix_timestamp)?;
+    accrue_interest(&mut ctx.accounts.market, clock.unix_timestamp)?;
 
     // ========================================================================
     // STEP 3: Calculate underlying assets to withdraw
     // ========================================================================
-    let total_rtokens = market.total_deposited_shares;
-    let total_assets = market.total_deposits;
+    let total_rtokens = ctx.accounts.market.total_deposited_shares;
+    let total_assets = ctx.accounts.market.total_deposits;
 
     let underlying_amount = (rtoken_amount as u128)
         .checked_mul(total_assets as u128)
@@ -164,7 +169,7 @@ pub fn handler_withdraw(ctx: Context<Withdraw>, rtoken_amount: u64) -> Result<()
     // STEP 6: Calculate withdrawal fee
     // ========================================================================
     let fee_amount = underlying_amount
-        .checked_mul(market.withdraw_fee)
+        .checked_mul(ctx.accounts.market.withdraw_fee)
         .ok_or(LendingError::MathOverflow)?
         .checked_div(BASIS_POINTS)
         .ok_or(LendingError::MathOverflow)?;
@@ -189,47 +194,77 @@ pub fn handler_withdraw(ctx: Context<Withdraw>, rtoken_amount: u64) -> Result<()
     // ========================================================================
     // STEP 8: Transfer underlying assets to user
     // ========================================================================
-    let market_key = market.key();
-    let seeds = &[
-        b"supply_vault",
-        market_key.as_ref(),
-        &[ctx.bumps.supply_vault],
-    ];
-    let signer = &[&seeds[..]];
+    // let market_key = market.key();
+    // let seeds = &[
+    //     b"supply_vault",
+    //     market_key.as_ref(),
+    //     &[ctx.bumps.supply_vault],
+    // ];
+    // let signer = &[&seeds[..]];
 
-    let transfer_ctx = CpiContext::new_with_signer(
-        ctx.accounts.token_program.to_account_info(),
-        Transfer {
-            from: ctx.accounts.supply_vault.to_account_info(),
-            to: ctx.accounts.user_token_account.to_account_info(),
-            authority: ctx.accounts.supply_vault.to_account_info(),
-        },
-        signer,
-    );
-    token::transfer(transfer_ctx, withdraw_after_fee)?;
+    // let transfer_ctx = CpiContext::new_with_signer(
+    //     ctx.accounts.token_program.to_account_info(),
+    //     Transfer {
+    //         from: ctx.accounts.supply_vault.to_account_info(),
+    //         to: ctx.accounts.user_token_account.to_account_info(),
+    //         authority: ctx.accounts.supply_vault.to_account_info(),
+    //     },
+    //     signer,
+    // );
+    // token::transfer(transfer_ctx, withdraw_after_fee)?;
+
+
+     let transfer_cpi_accounts = TransferChecked {
+        from: ctx.accounts.supply_vault.to_account_info(),
+        mint: ctx.accounts.mint.to_account_info(),
+        to: ctx.accounts.user_token_account.to_account_info(),
+        authority: ctx.accounts.supply_vault.to_account_info(),
+    };
+
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+    let mint_key = ctx.accounts.mint.key();
+    let market_key = ctx.accounts.market.key();
+    let signer_seeds: &[&[&[u8]]] = &[
+        &[
+            b"supply_vault",
+            market_key.as_ref(),
+            &[ctx.bumps.supply_vault],
+        ],
+    ];
+    let cpi_ctx = CpiContext::new(cpi_program, transfer_cpi_accounts).with_signer(signer_seeds);
+
+    let decimals = ctx.accounts.mint.decimals;
+
+    token_interface::transfer_checked(cpi_ctx, withdraw_after_fee, decimals)?;
+
 
     // ========================================================================
     // STEP 9: Transfer fee
     // ========================================================================
-    if fee_amount > 0 {
-        let fee_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            Transfer {
-                from: ctx.accounts.supply_vault.to_account_info(),
-                to: ctx.accounts.fee_collector_account.to_account_info(),
-                authority: ctx.accounts.supply_vault.to_account_info(),
-            },
-            signer,
-        );
-        token::transfer(fee_ctx, fee_amount)?;
-    }
+    // if fee_amount > 0 {
+    //     let fee_ctx = CpiContext::new_with_signer(
+    //         ctx.accounts.token_program.to_account_info(),
+    //         Transfer {
+    //             from: ctx.accounts.supply_vault.to_account_info(),
+    //             to: ctx.accounts.fee_collector_account.to_account_info(),
+    //             authority: ctx.accounts.supply_vault.to_account_info(),
+    //         },
+    //         signer,
+    //     );
+    //     token::transfer(fee_ctx, fee_amount)?;
+    // }
 
     // ========================================================================
     // STEP 10: Update state
     // ========================================================================
+    let market = &mut ctx.accounts.market;
     market.total_deposits = market
         .total_deposits
         .checked_sub(underlying_amount)
+        .ok_or(LendingError::MathOverflow)?;
+    market.total_deposited_shares = market
+        .total_deposited_shares
+        .checked_sub(rtoken_amount)
         .ok_or(LendingError::MathOverflow)?;
 
     user_position.deposited_shares = user_position

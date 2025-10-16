@@ -20,9 +20,11 @@ custom-heap = []
 custom-panic = []
 
 
+
 [dependencies]
 anchor-lang = { version="0.31.1", features=["init-if-needed"] }
 anchor-spl = "0.31.1"
+solana-program = "2.1.0"
 
 
 [lints.rust]
