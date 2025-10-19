@@ -8,6 +8,7 @@ pub struct ProtocolState {
     pub fee_collector: Pubkey,
     pub protocol_paused: bool,
     pub total_markets: u64,
+    pub total_loans: u64,
     pub bump: u8,
 }
 
@@ -85,44 +86,58 @@ impl UserPosition {
     }
 }
 
-// #[account]
-// pub struct Loan {
-//     pub borrower: Pubkey,
-//     pub loan_id: u64,
+#[account]
+#[derive(InitSpace)]
+pub struct Loan {
+    pub borrower: Pubkey,
+    pub loan_id: u64,          // Unique loan identifier will be an incremental number
 
-//     // Collateral
-//     pub collateral_market: Pubkey,
-//     pub collateral_amount: u64,          // rToken shares locked
+    // Collateral
+    pub collateral_market: Pubkey,       // underlying ,market like USDC, USDT
+    pub collateral_amount: u64,          // rToken shares locked as collateral
 
-//     // Borrow
-//     pub borrow_market: Pubkey,
-//     pub borrowed_amount: u64,            // dToken shares
-//     pub borrowed_underlying: u64,        // Actual asset amount borrowed (for tracking)
+    // Borrow
+    pub borrow_market: Pubkey,           // underlying market like USDC, USDT    
+    pub borrowed_amount: u64,            // dToken shares
+    pub borrowed_underlying: u64,        // Actual asset amount borrowed (for tracking)
 
-//     // L3 Integration (for spending loans in DeFi)
-//     pub current_market: Pubkey,          // Where is the loan currently?
-//     pub current_amount: u64,             // How much is there?
-//     pub l3_integration: Pubkey,          // Which protocol is it in?
+    // L3 Integration (for spending loans in DeFi)
+    pub current_market: Pubkey,          // Where is the loan currently?
+    pub current_amount: u64,             // How much is there?
+    pub l3_integration: Pubkey,          // Which protocol is it in?
+    pub current_spent_status:SpentStatus,
 
-//     // Status
-//     pub status: LoanStatus,              // Active, Spent, Repaid, Liquidated
-//     pub created_at: i64,
-//     pub updated_at: i64,
+    // Status
+    pub status: LoanStatus,              // Active, Spent, Repaid, Liquidated
+    pub created_at: i64,
+    pub updated_at: i64,
 
-//     pub bump: u8,
-// }
+    pub bump: u8,
+}
 
-// impl Loan {
-//     pub const LEN: usize = 8 + 32 + 8 + 32*2 + 8 + 32 + 8*2 + 32*3 + 1 + 8*2 + 1;
-// }
+impl Loan {
+    pub const LEN: usize = 8 + 32 + 8 + 32*2 + 8 + 32 + 8*2 + 32*3 + 1 + 8*2 + 1;
+}
 
-// #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq)]
-// pub enum LoanStatus {
-//     Active,      // Loan is active, funds with user
-//     Spent,       // Loan funds spent in L3 protocol (DEX, etc.)
-//     Repaid,      // Loan fully repaid
-//     Liquidated,  // Loan was liquidated
-// }
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq)]
+pub enum LoanStatus {
+    Active,      // Loan is active, funds with user
+    Spent,       // Loan funds spent in L3 protocol (DEX, etc.)
+    Repaid,      // Loan fully repaid
+    Liquidated,  // Loan was liquidated
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq)]
+pub enum SpentStatus {
+    NotSpent,
+    Deposit,    // Funds not yet spent
+    Withdraw,      // Funds spent in L3 protocol
+    AddLiquidity, // Funds used to add liquidity
+    RemoveLiquidity, // Funds removed from liquidity
+    Swap,           // Funds swapped in DEX
+    GetL3Value,    // Fetch value from L3 protocol
+    Other
+}
 
 
 

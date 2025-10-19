@@ -35,7 +35,9 @@ pub fn handler_initialize_protocol(ctx: Context<InitializeProtocol>) -> Result<(
     protocol_state.fee_collector = ctx.accounts.fee_collector.key();
     protocol_state.protocol_paused = false;
     protocol_state.total_markets = 0;
+    protocol_state.total_loans = 0;
     protocol_state.bump = ctx.bumps.protocol_state;
+
 
     msg!("  Protocol initialized!");
     msg!("   Admin: {}", protocol_state.admin);

@@ -45,4 +45,8 @@ pub mod core_router {
     ) -> Result<()> {
         handler_initialize_user_position(ctx, market_mint)
     }
+
+    pub fn initialize_loan(ctx: Context<InitializeLoan>, borrow_asset: Pubkey, collateral_asset: Pubkey) -> Result<()> {
+        handler_initialize_loan(ctx, borrow_asset, collateral_asset)
+    }
 }

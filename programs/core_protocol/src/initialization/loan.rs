@@ -1,8 +1,9 @@
+use core::borrow;
+
 use crate::constants::{ANCHOR_DISCRIMINATOR_SIZE, PRECISION};
 use crate::errors::LendingError;
-use crate::state::{ProtocolState,Loan};
+use crate::state::{ProtocolState,Loan,Market};
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 
 #[derive(Accounts)]
@@ -39,7 +40,7 @@ pub struct InitializeLoan<'info> {
         init,
         payer = borrower,
         space = Loan::LEN,
-        seeds = [b"loan",collateral_market.key().as_ref(),borrow_market.key().as_ref(),borrower.key().as_ref()],
+        seeds = [b"loan",supply_market.key().as_ref(),borrow_market.key().as_ref(),borrower.key().as_ref()],
         bump
     )]
     pub loan: Account<'info, Loan>,
@@ -49,7 +50,7 @@ pub struct InitializeLoan<'info> {
 
 
 pub fn handler_initialize_loan(
-    ctx: Context<InitializeLoan>,
+    ctx: Context<InitializeLoan>,borrow_asset:Pubkey,collateral_asset:Pubkey
 ) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
     loan.borrower = ctx.accounts.borrower.key();

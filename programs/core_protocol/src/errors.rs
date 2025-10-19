@@ -24,6 +24,8 @@ pub enum LendingError {
     InsufficientFreeRTokens,
     #[msg("Withdraw exceeds daily limit (20% of reserves)")]
     WithdrawLimitExceeded,
+    #[msg("Invalid market for the given asset")]
+    InvalidMarket,
     #[msg("Unauthorized")]
     Unauthorized,
 }

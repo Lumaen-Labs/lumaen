@@ -5,7 +5,7 @@ use crate::state::*;
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{
-    self, Burn, Mint, TokenAccount, TokenInterface, TransferChecked,
+    self, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
 
 #[derive(Accounts)]
