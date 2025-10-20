@@ -156,3 +156,23 @@ pub fn accrue_interest(market: &mut Market, current_timestamp: i64) -> Result<()
     msg!("   To suppliers: {}", to_suppliers);
     Ok(())
 }
+
+// Helper function to normalize Pyth prices
+pub fn normalize_price(
+    price: i64,
+    exponent: i32
+) -> Result<u64> {
+    // Pyth prices come with an exponent (usually negative)
+    // We need to convert to a standard format
+    let price_u64 = price.abs() as u64;
+    
+    if exponent >= 0 {
+        // Positive exponent: multiply
+        Ok(price_u64.checked_mul(10u64.pow(exponent as u32))
+            .ok_or(LendingError::MathOverflow)?)
+    } else {
+        // Negative exponent: divide
+        Ok(price_u64.checked_div(10u64.pow((-exponent) as u32))
+            .ok_or(LendingError::MathOverflow)?)
+    }
+}

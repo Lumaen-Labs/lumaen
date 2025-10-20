@@ -1,5 +1,5 @@
 use crate::constants::ANCHOR_DISCRIMINATOR_SIZE;
-use crate::state::UserPosition;
+use crate::state::{UserPosition,Market};
 use anchor_lang::prelude::*;
 
 // ============================================================================
@@ -12,21 +12,21 @@ use anchor_lang::prelude::*;
 
 // Create rToken account (for depositors/suppliers)
 #[derive(Accounts)]
-#[instruction(market_mint:Pubkey)]
 pub struct InitializeUserPosition<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
-    // #[account(
-    //     seeds = [b"market", market.mint.as_ref()],
-    //     bump = market.bump,
-    // )]
-    // pub market: Account<'info, Market>,
+    #[account(
+        seeds = [b"market", market.mint.as_ref()],
+        bump = market.bump,
+    )]
+    pub market: Account<'info, Market>,
+
     #[account(
         init,
         payer = signer,
         space = ANCHOR_DISCRIMINATOR_SIZE + UserPosition::INIT_SPACE,
-        seeds =[b"user_account",signer.key().as_ref(),market_mint.as_ref()],
+        seeds =[b"user_account",signer.key().as_ref(),market.key().as_ref()],
         bump
     )]
     pub user_account: Account<'info, UserPosition>,
@@ -52,12 +52,11 @@ pub struct InitializeUserPosition<'info> {
 }
 
 pub fn handler_initialize_user_position(
-    ctx: Context<InitializeUserPosition>,
-    market_mint: Pubkey,
+    ctx: Context<InitializeUserPosition>
 ) -> Result<()> {
     let user_account = &mut ctx.accounts.user_account;
     user_account.user = ctx.accounts.signer.key();
-    user_account.market = market_mint;
+    user_account.market = ctx.accounts.market.key();
     user_account.deposited_shares = 0;
     user_account.locked_collateral = 0;
     user_account.borrowed_shares = 0;

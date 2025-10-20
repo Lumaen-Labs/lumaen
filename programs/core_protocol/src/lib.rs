@@ -40,13 +40,16 @@ pub mod core_router {
 
     // Initialize user position account
     pub fn initialize_user_position(
-        ctx: Context<InitializeUserPosition>,
-        market_mint: Pubkey,
+        ctx: Context<InitializeUserPosition>
     ) -> Result<()> {
-        handler_initialize_user_position(ctx, market_mint)
+        handler_initialize_user_position(ctx)
     }
 
     pub fn initialize_loan(ctx: Context<InitializeLoan>, borrow_asset: Pubkey, collateral_asset: Pubkey) -> Result<()> {
         handler_initialize_loan(ctx, borrow_asset, collateral_asset)
     }
+    pub fn borrow(ctx: Context<Borrow>, shares_amount: u64, borrow_amount: u64) -> Result<(u64)> {
+        borrow_handler(ctx, shares_amount, borrow_amount)
+    }
+
 }

@@ -68,8 +68,8 @@ pub struct Deposit<'info> {
         mut,
         // payer = signer,
         // space = ANCHOR_DISCRIMINATOR_SIZE + UserPosition::INIT_SPACE,
-        // seeds = [b"user_position", user.key().as_ref(), market.key().as_ref()],
-        // bump,
+        seeds = [b"user_position", signer.key().as_ref(), market.key().as_ref()],
+        bump = user_position.bump,
         constraint = user_position.user == signer.key() @ LendingError::Unauthorized
     )]
     pub user_position: Account<'info, UserPosition>,

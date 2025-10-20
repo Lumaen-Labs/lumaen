@@ -6,6 +6,10 @@ pub enum LendingError {
     DepositTooSmall,
     #[msg("Deposit amount exceeds maximum allowed")]
     DepositTooLarge,
+    #[msg("Borrow amount below minimum threshold")]
+    BorrowTooSmall,
+    #[msg("Borrow amount exceeds maximum allowed")]
+    BorrowTooLarge,
     #[msg("Insufficient liquidity in supply vault")]
     InsufficientLiquidity,
     #[msg("Loan-to-Value ratio exceeds maximum allowed")]
