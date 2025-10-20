@@ -32,4 +32,6 @@ pub enum LendingError {
     InvalidMarket,
     #[msg("Unauthorized")]
     Unauthorized,
+    #[msg("Repay amount exceeds outstanding borrow")]
+    RepayAmountTooSmall,
 }

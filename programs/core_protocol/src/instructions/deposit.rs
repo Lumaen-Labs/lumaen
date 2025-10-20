@@ -45,7 +45,7 @@ pub struct Deposit<'info> {
     #[account(
         mut,
         seeds = [b"supply_vault", market.key().as_ref()],
-        bump,
+        bump
     )]
     pub supply_vault: InterfaceAccount<'info, TokenAccount>,
 
