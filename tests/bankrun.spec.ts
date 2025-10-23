@@ -8,7 +8,7 @@ import { startAnchor, BanksClient, ProgramTestContext } from "solana-bankrun";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 
 // @ts-ignore
-import IDL from "../target/idl/core_protocol.json";
+import IDL from "../target/idl/core_router.json";
 import { CoreRouter } from "../target/types/core_router";
 
 describe("Core Protocol Tests", async () => {
@@ -17,12 +17,25 @@ describe("Core Protocol Tests", async () => {
   let context: ProgramTestContext;
   let banksClient: BanksClient;
   let signer: Keypair;
-  let mint: PublicKey;
-  let market: PublicKey;
-  let supplyVault: PublicKey;
-  let userPosition: PublicKey;
-  let userTokenAccount: PublicKey;
+  // let mint: PublicKey;
+  // let market: PublicKey;
+  // let supplyVault: PublicKey;
+  // let userPosition: PublicKey;
+  // let userTokenAccount: PublicKey;
+  // let protocolState: PublicKey;
+
   let protocolState: PublicKey;
+  let usdcMint: PublicKey;
+  let solMint: PublicKey;
+  let usdcMarket: PublicKey;
+  let solMarket: PublicKey;
+  let usdcSupplyVault: PublicKey;
+  let solSupplyVault: PublicKey;
+  let userUsdcAccount: PublicKey;
+  let userSolAccount: PublicKey;
+  let userPosition: PublicKey;
+  let loan: PublicKey;    
+  let loanCTokenVault: PublicKey;
 
 
   // Initialize test context
@@ -36,6 +49,33 @@ describe("Core Protocol Tests", async () => {
   program = new Program<CoreRouter>(IDL as CoreRouter, provider);
   banksClient = context.banksClient;
   signer = provider.wallet.payer;
+
+      // Derive PDAs
+  [protocolState] =  await PublicKey.findProgramAddressSync(
+      [Buffer.from("protocol_state")],
+      program.programId
+    );
+
+  [usdcMarket] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("market"), usdcMint.toBuffer()],
+      program.programId
+    );
+
+  [solMarket] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("market"), solMint.toBuffer()],
+      program.programId
+    );
+
+  [usdcSupplyVault] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("supply_vault"), usdcMarket.toBuffer()],
+      program.programId
+    );
+
+  [solSupplyVault] = await PublicKey.findProgramAddressSync(
+      [Buffer.from("supply_vault"), solMarket.toBuffer()],
+      program.programId
+    );
+  
 
   console.log("set up completed");
 
@@ -61,55 +101,55 @@ describe("Core Protocol Tests", async () => {
     console.log("Protocol initialized:", initTx);
   });
 
-  // it("Initialize Market", async () => {
-  //   // Create test token mint
-  //   mint = await createMint(
-  //     banksClient,
-  //     signer,
-  //     signer.publicKey,
-  //     null,
-  //     6
-  //   );
+  it("Initialize Market", async () => {
+    // Create test token mint
+    mint = await createMint(
+      banksClient,
+      signer,
+      signer.publicKey,
+      null,
+      6
+    );
 
-  //   [market] = PublicKey.findProgramAddressSync(
-  //     [Buffer.from("market"), mint.toBuffer()],
-  //     program.programId
-  //   );
+    [market] = PublicKey.findProgramAddressSync(
+      [Buffer.from("market"), mint.toBuffer()],
+      program.programId
+    );
 
-  //   [supplyVault] = PublicKey.findProgramAddressSync(
-  //     [Buffer.from("supply_vault"), market.toBuffer()],
-  //     program.programId
-  //   );
+    [supplyVault] = PublicKey.findProgramAddressSync(
+      [Buffer.from("supply_vault"), market.toBuffer()],
+      program.programId
+    );
 
-  //   const marketConfig = {
-  //     maxLtv: 7500,
-  //     liquidationThreshold: 8000,
-  //     liquidationPenalty: 500,
-  //     reserveFactor: 1000,
-  //     minDepositAmount: new BN(1000000),
-  //     maxDepositAmount: new BN(1000000000000),
-  //     minBorrowAmount: new BN(1000000),
-  //     maxBorrowAmount: new BN(1000000000000),
-  //     depositFee: 0,
-  //     withdrawFee: 0,
-  //     borrowFee: 0,
-  //     repayFee: 0,
-  //   };
+    const marketConfig = {
+      maxLtv: 7500,
+      liquidationThreshold: 8000,
+      liquidationPenalty: 500,
+      reserveFactor: 1000,
+      minDepositAmount: new BN(1000000),
+      maxDepositAmount: new BN(1000000000000),
+      minBorrowAmount: new BN(1000000),
+      maxBorrowAmount: new BN(1000000000000),
+      depositFee: 0,
+      withdrawFee: 0,
+      borrowFee: 0,
+      repayFee: 0,
+    };
 
-  //   const initMarketTx = await program.methods
-  //     .initializeMarket(marketConfig)
-  //     .accounts({
-  //       owner: signer.publicKey,
-  //       underlyingMint: mint,
-  //       market,
-  //       supplyVault,
-  //       tokenProgram: TOKEN_PROGRAM_ID,
-  //       systemProgram: anchor.web3.SystemProgram.programId,
-  //     })
-  //     .rpc({ commitment: "confirmed" });
+    const initMarketTx = await program.methods
+      .initializeMarket(marketConfig)
+      .accounts({
+        owner: signer.publicKey,
+        underlyingMint: mint,
+        market,
+        supplyVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc({ commitment: "confirmed" });
 
-  //   console.log("Market initialized:", initMarketTx);
-  // });
+    console.log("Market initialized:", initMarketTx);
+  });
 
   // it("Initialize User Position", async () => {
   //   [userPosition] = PublicKey.findProgramAddressSync(

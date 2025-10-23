@@ -1,3 +1,6 @@
+
+
+
 use anchor_lang::prelude::*;
 
 // Global protocol configuration (Single instance)
@@ -11,7 +14,6 @@ pub struct ProtocolState {
     pub total_loans: u64,
     pub bump: u8,
 }
-
 /// Market configuration for each asset (SOL, USDC, etc.)
 #[account]
 #[derive(InitSpace)]
@@ -33,9 +35,9 @@ pub struct Market {
     pub supply_index: u128, // Accumulated supply interest index
     pub borrow_index: u128, // Accumulated borrow interest index
 
-    // Risk parameters
-    pub max_ltv: u64,               // Max LTV in basis points (e.g., 7500 = 75%)
-    pub liquidation_threshold: u64, // Liquidation threshold (e.g., 8000 = 80%)
+    // Risk parameters (Updated for 5x leverage)
+    pub max_ltv: u64,               // Max LTV in basis points (50000 = 500% for 5x leverage)
+    pub liquidation_threshold: u64, // Liquidation threshold (52500 = 525%)
     pub liquidation_penalty: u64,   // Liquidation bonus (e.g., 500 = 5%)
     pub reserve_factor: u64,        // % of interest to reserves (e.g., 1000 = 10%)
 
@@ -50,7 +52,6 @@ pub struct Market {
     pub deposit_snapshot: u64, // Snapshot at reset time
     
     // Pyth price feed IDs
-    // https://pyth.network/developers/price-feed-ids#solana-stable
     pub pyth_feed_id: [u8; 32],
 
     // Fees (in basis points)
@@ -86,17 +87,15 @@ pub struct UserPosition {
 
 impl UserPosition {
     pub fn free_rtokens(&self) -> u64 {
-        self.deposited_shares.checked_sub(self.locked_collateral).expect("ShutUp")
+        self.deposited_shares.saturating_sub(self.locked_collateral)
     }
 }
 
-// Remove InitSpace and calculate manually for structs with enums
+// Loan struct with L3 tracking
 #[account]
-#[derive(InitSpace)]
 pub struct Loan {
-
     pub borrower: Pubkey,
-    pub loan_id: u64,          // Unique loan identifier will be an incremental number
+    pub loan_id: u64,          // Unique loan identifier
 
     // Collateral
     pub collateral_market: Pubkey,       // underlying market like USDC, USDT
@@ -112,13 +111,13 @@ pub struct Loan {
 
     // L3 Integration (for spending loans in DeFi)
     pub current_market: Pubkey,          // Where is the loan currently?
-    pub current_amount: u64,             // How much is there?
+    pub current_amount: u64,             // How much underlying is there?
     pub l3_integration: Pubkey,          // Which protocol is it in?
-    // pub current_spent_status: SpentStatus,
-    pub current_spent_u8: u8,      // Additional info about current status
+    pub l3_shares_received: u64,         // Amount of shares/cTokens received from L3
+    pub current_spent_u8: u8,            // Status: 0=NotSpent, 1=InSolend, 2=InOtherProtocol
+    
     // Status
-    pub status_u8: u8,
-    // pub status: LoanStatus,              // Active, Spent, Repaid, Liquidated
+    pub status_u8: u8,                   // 0=Active, 1=Repaid, 2=Liquidated
     pub created_at: i64,
     pub updated_at: i64,
 
@@ -126,45 +125,21 @@ pub struct Loan {
 }
 
 impl Loan {
-    // Manual space calculation:
+    // Manual space calculation with new field:
     // 8 (discriminator) + 32 (borrower) + 8 (loan_id) + 
     // 32 (collateral_market) + 8 (collateral_amount) + 
     // 32 (borrow_market) + 8 (borrowed_amount) + 8 (borrowed_underlying) +
     // 32 (user_position_account) + 32 (current_market) + 8 (current_amount) +
-    // 32 (l3_integration) + 1 (current_spent_status enum) + 1 (status enum) +
-    // 8 (created_at) + 8 (updated_at) + 1 (bump)
-    pub const LEN: usize = 8 + 32 + 8 + 32 + 8 + 32 + 8 + 8 + 32 + 32 + 8 + 32 + 1 + 1 + 8 + 8 + 1;
+    // 32 (l3_integration) + 8 (l3_shares_received) + 1 (current_spent_u8) + 
+    // 1 (status_u8) + 8 (created_at) + 8 (updated_at) + 1 (bump)
+    pub const LEN: usize = 8 + 32 + 8 + 32 + 8 + 32 + 8 + 8 + 32 + 32 + 8 + 32 + 8 + 1 + 1 + 8 + 8 + 1;
 }
-
-// impl Space for Loan {
-//     const INIT_SPACE: usize = Self::LEN;
-// }
-
-// #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq,InitSpace)]
-// pub enum LoanStatus {
-//     Active,      // Loan is active, funds with user
-//     Spent,       // Loan funds spent in L3 protocol (DEX, etc.)
-//     Repaid,      // Loan fully repaid
-//     Liquidated,  // Loan was liquidated
-// }
-
-// #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq,InitSpace)]
-// pub enum SpentStatus {
-//     NotSpent,
-//     Deposit,         // Funds not yet spent
-//     Withdraw,        // Funds spent in L3 protocol
-//     AddLiquidity,    // Funds used to add liquidity
-//     RemoveLiquidity, // Funds removed from liquidity
-//     Swap,            // Funds swapped in DEX
-//     GetL3Value,      // Fetch value from L3 protocol
-//     Other,
-// }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct MarketConfig {
-    // Risk parameters
-    pub max_ltv: u64,               // e.g., 7500 = 75%
-    pub liquidation_threshold: u64, // e.g., 8000 = 80%
+    // Risk parameters (Updated for 5x leverage)
+    pub max_ltv: u64,               // e.g., 50000 = 500% for 5x leverage
+    pub liquidation_threshold: u64, // e.g., 52500 = 525%
     pub liquidation_penalty: u64,   // e.g., 500 = 5%
     pub reserve_factor: u64,        // e.g., 1000 = 10%
 
@@ -179,4 +154,7 @@ pub struct MarketConfig {
     pub withdraw_fee: u64,
     pub borrow_fee: u64,
     pub repay_fee: u64,
+    
+    // Pyth price feed ID
+    pub pyth_feed_id: [u8; 32],
 }

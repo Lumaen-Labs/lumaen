@@ -322,7 +322,7 @@ pub struct Borrow<'info>{
         seeds = [b"protocol_state"],
         bump = protocol_state.bump,
     )]
-    pub protocol_state: Box<Account<'info, ProtocolState>>,  // ✅ Boxed
+    pub protocol_state: Box<Account<'info, ProtocolState>>, 
 
     // Collateral market (e.g., USDC) for updating  
     #[account(
@@ -330,7 +330,7 @@ pub struct Borrow<'info>{
         seeds = [b"market", collateral_market.mint.as_ref()],
         bump = collateral_market.bump,
     )]
-    pub collateral_market: Box<Account<'info, Market>>,  // ✅ Boxed
+    pub collateral_market: Box<Account<'info, Market>>, 
 
     #[account(
         mut,
@@ -338,21 +338,21 @@ pub struct Borrow<'info>{
         bump = borrow_market.bump,
         constraint = !borrow_market.paused @ LendingError::MarketPaused,
     )]
-    pub borrow_market: Box<Account<'info, Market>>,  // ✅ Boxed
+    pub borrow_market: Box<Account<'info, Market>>, 
 
     #[account(
         mut,
         seeds = [b"user_position", borrower.key().as_ref(), collateral_market.key().as_ref()],
         bump = collateral_position.bump,
     )]
-    pub collateral_position: Box<Account<'info, UserPosition>>,  // ✅ Boxed
+    pub collateral_position: Box<Account<'info, UserPosition>>, 
 
     #[account(
         mut,
         seeds = [b"loan", collateral_market.key().as_ref(), borrow_market.key().as_ref(), borrower.key().as_ref()],
         bump = loan.bump,
     )]
-    pub loan: Box<Account<'info, Loan>>,  // ✅ Boxed
+    pub loan: Box<Account<'info, Loan>>,  
 
     pub token_program: Interface<'info, TokenInterface>,
     pub price_update: Account<'info, PriceUpdateV2>,
@@ -363,7 +363,7 @@ pub fn borrow_handler(
     ctx: Context<Borrow>,
     shares_amount: u64,
     borrow_amount: u64,
-) -> Result<u64> {  // ✅ Fixed return type syntax
+) -> Result<u64> {
     // Implement the borrow logic here
 
     let collateral_market = &mut ctx.accounts.collateral_market;
@@ -532,8 +532,8 @@ pub fn borrow_handler(
     loan.current_market = borrow_market.mint;
     loan.current_amount = net_borrow;
     loan.l3_integration = Pubkey::default();
-    // loan.status = LoanStatus::Active;  // ✅ Use enum
-    // loan.current_spent_status = SpentStatus::NotSpent;  // ✅ Use enum
+    // loan.status = LoanStatus::Active;  
+    // loan.current_spent_status = SpentStatus::NotSpent;  
     loan.created_at = clock.unix_timestamp;
     loan.updated_at = clock.unix_timestamp;
     loan.user_position_account = collateral_position.key();
@@ -548,7 +548,7 @@ pub fn borrow_handler(
         .checked_add(debt_shares)
         .ok_or(LendingError::MathOverflow)?;
     
-    msg!("✅ Loan created successfully!");
+    msg!("   Loan created successfully!");
     msg!("   Loan ID: {}", loan.loan_id);
     msg!("   Collateral: {} rTokens", shares_amount);
     msg!("   Borrowed: {} assets ({} dTokens)", net_borrow, debt_shares);
@@ -557,5 +557,9 @@ pub fn borrow_handler(
     
     Ok(loan.loan_id)
 }
+
+
+
+
 
 

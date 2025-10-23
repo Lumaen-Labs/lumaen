@@ -51,5 +51,19 @@ pub mod core_router {
     pub fn borrow(ctx: Context<Borrow>, shares_amount: u64, borrow_amount: u64) -> Result<(u64)> {
         borrow_handler(ctx, shares_amount, borrow_amount)
     }
+    pub fn repay(ctx: Context<Repay>, repay_amount: u64) -> Result<()> {
+        handler_repay(ctx, repay_amount)
+    }
+
+    pub fn invest_in_solend(
+        ctx: Context<InvestInSolend>,
+    ) -> Result<()> {
+        handler_invest_in_solend(ctx)
+    }
+    pub fn withdraw_from_solend(
+        ctx: Context<WithdrawFromSolend>,
+    ) -> Result<()> {
+        handler_withdraw_from_solend(ctx)
+    }
 
 }

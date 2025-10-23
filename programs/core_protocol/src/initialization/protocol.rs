@@ -45,3 +45,20 @@ pub fn handler_initialize_protocol(ctx: Context<InitializeProtocol>) -> Result<(
 
     Ok(())
 }
+
+// Global protocol configuration (Single instance)
+// #[account]
+// #[derive(InitSpace)]
+// pub struct ProtocolState {
+//     pub admin: Pubkey,
+//     pub fee_collector: Pubkey,
+//     pub protocol_paused: bool,
+//     pub total_markets: u64,
+//     pub total_loans: u64,
+//     pub bump: u8,
+// }
+
+
+
+
+
