@@ -327,14 +327,14 @@ pub struct Borrow<'info>{
     // Collateral market (e.g., USDC) for updating  
     #[account(
         mut,
-        seeds = [b"market", collateral_market.mint.as_ref()],
+        seeds = [b"market", collateral_mint.key().as_ref()],
         bump = collateral_market.bump,
     )]
     pub collateral_market: Box<Account<'info, Market>>, 
 
     #[account(
         mut,
-        seeds = [b"market", borrow_market.mint.as_ref()],
+        seeds = [b"market", borrow_mint.key().as_ref()],
         bump = borrow_market.bump,
         constraint = !borrow_market.paused @ LendingError::MarketPaused,
     )]

@@ -26,7 +26,7 @@ pub struct Deposit<'info> {
     // get the associated market config
     #[account(
         mut,
-        seeds = [b"market", market.mint.as_ref()],
+        seeds = [b"market", mint.key().as_ref()],
         bump = market.bump,
         constraint = market.paused == false @ LendingError::MarketPaused,
     )]
@@ -68,7 +68,7 @@ pub struct Deposit<'info> {
         mut,
         // payer = signer,
         // space = ANCHOR_DISCRIMINATOR_SIZE + UserPosition::INIT_SPACE,
-        seeds = [b"user_position", signer.key().as_ref(), market.key().as_ref()],
+        seeds = [b"user_account", signer.key().as_ref(), market.key().as_ref()],
         bump = user_position.bump,
         constraint = user_position.user == signer.key() @ LendingError::Unauthorized
     )]

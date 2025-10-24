@@ -11,7 +11,7 @@ mod instructions;
 mod state;
 
 
-declare_id!("7igW79sx9a5aR6XJJve8Uj8QJNrLg1K4A8RqiLZKK9fL");
+declare_id!("G4MitBcWMKCVaPibM4Y1AQ3nfPcQDygGRcYryKfs2XYK");
 
 
 #[program]

@@ -6,10 +6,16 @@ skip-lint = false
 anchor_version = "0.31.1"
 
 [programs.localnet]
-core_protocol = "7igW79sx9a5aR6XJJve8Uj8QJNrLg1K4A8RqiLZKK9fL"
+core_protocol = "G4MitBcWMKCVaPibM4Y1AQ3nfPcQDygGRcYryKfs2XYK"
 
 [programs.devnet]
-core_protocol = "7igW79sx9a5aR6XJJve8Uj8QJNrLg1K4A8RqiLZKK9fL"
+core_protocol = "G4MitBcWMKCVaPibM4Y1AQ3nfPcQDygGRcYryKfs2XYK"
+
+[[test.validator.clone]]
+address = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+
+[[test.validator.clone]]
+address = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 
 [registry]
 url = "https://api.apr.dev"

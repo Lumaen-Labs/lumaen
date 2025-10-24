@@ -25,7 +25,7 @@ pub struct Withdraw<'info> {
     // pub protocol_state: Account<'info, ProtocolState>,
     #[account(
         mut,
-        seeds = [b"market", market.mint.as_ref()],
+        seeds = [b"market", mint.key().as_ref()],
         bump = market.bump,
         constraint = market.paused == false @ LendingError::MarketPaused,
     )]
@@ -72,7 +72,7 @@ pub struct Withdraw<'info> {
     // pub user_position: Account<'info, UserPosition>,
     #[account(
         mut, 
-        seeds =[b"user_account",signer.key().as_ref(),market.mint.as_ref()],
+        seeds =[b"user_account",signer.key().as_ref(),mint.key().as_ref()],
         bump,
     )]
     pub user_position: Account<'info, UserPosition>,
