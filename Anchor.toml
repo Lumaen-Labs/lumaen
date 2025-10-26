@@ -1,21 +1,15 @@
 [features]
-seeds = false
+seeds = true
 skip-lint = false
 
 [toolchain]
 anchor_version = "0.31.1"
 
 [programs.localnet]
-core_protocol = "G4MitBcWMKCVaPibM4Y1AQ3nfPcQDygGRcYryKfs2XYK"
+core_protocol = "FRZjMjpFPrSCeFQSEeN9DPmTd4Ny4nTpByrNvcFTbUtQ"
 
 [programs.devnet]
-core_protocol = "G4MitBcWMKCVaPibM4Y1AQ3nfPcQDygGRcYryKfs2XYK"
-
-[[test.validator.clone]]
-address = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-
-[[test.validator.clone]]
-address = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+core_protocol = "FRZjMjpFPrSCeFQSEeN9DPmTd4Ny4nTpByrNvcFTbUtQ"
 
 [registry]
 url = "https://api.apr.dev"

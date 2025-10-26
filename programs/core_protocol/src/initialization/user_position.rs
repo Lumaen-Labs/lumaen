@@ -1,6 +1,8 @@
 use crate::constants::ANCHOR_DISCRIMINATOR_SIZE;
 use crate::state::{UserPosition,Market};
 use anchor_lang::prelude::*;
+use anchor_spl::token_interface::{Mint,TokenInterface};
+
 
 // ============================================================================
 // INSTRUCTION 3: Create User Token Accounts (Separate for flexibility)
@@ -13,12 +15,15 @@ use anchor_lang::prelude::*;
 // Create rToken account (for depositors/suppliers)
 #[derive(Accounts)]
 pub struct InitializeUserPosition<'info> {
+
     #[account(mut)]
     pub signer: Signer<'info>,
 
+    // pub mint: InterfaceAccount<'info, Mint>,
+
     #[account(
         seeds = [b"market", market.mint.as_ref()],
-        bump = market.bump,
+        bump
     )]
     pub market: Account<'info, Market>,
 
@@ -31,30 +36,14 @@ pub struct InitializeUserPosition<'info> {
     )]
     pub user_account: Account<'info, UserPosition>,
 
-    /// The rToken mint account (PDA owned by market)
-    // #[account(
-    //     seeds = [b"rtoken_mint", market.key().as_ref()],
-    //     bump,
-    // )]
-    // pub rtoken_mint: InterfaceAccount<'info, Mint>,
-
-    /// User's rToken account (receipt tokens for deposits)
-    // #[account(
-    //     init,
-    //     payer = user,
-    //     token::mint = rtoken_mint,
-    //     token::authority = user,
-    // )]
-    // pub user_rtoken_account: InterfaceAccount<'info, TokenAccount>,
-
-    // pub token_program: Interface<'info, TokenInterface>,
-    pub system_program: Program<'info, System>, // pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System> 
 }
 
 pub fn handler_initialize_user_position(
     ctx: Context<InitializeUserPosition>
 ) -> Result<()> {
     let user_account = &mut ctx.accounts.user_account;
+    msg!("✅ User Position account created!");
     user_account.user = ctx.accounts.signer.key();
     user_account.market = ctx.accounts.market.key();
     user_account.deposited_shares = 0;

@@ -11,7 +11,7 @@ mod instructions;
 mod state;
 
 
-declare_id!("G4MitBcWMKCVaPibM4Y1AQ3nfPcQDygGRcYryKfs2XYK");
+declare_id!("FRZjMjpFPrSCeFQSEeN9DPmTd4Ny4nTpByrNvcFTbUtQ");
 
 
 #[program]
@@ -24,9 +24,9 @@ pub mod core_router {
     }
 
     // Withdraw tokens by burning shares
-    pub fn withdraw(ctx: Context<Withdraw>, shares: u64) -> Result<()> {
-        withdraw_handler(ctx, shares)
-    }
+    // pub fn withdraw(ctx: Context<Withdraw>, shares: u64) -> Result<()> {
+    //     withdraw_handler(ctx, shares)
+    // }
 
     // Initialize the protocol state
     pub fn initialize_protocol(ctx: Context<InitializeProtocol>) -> Result<()> {
@@ -40,30 +40,30 @@ pub mod core_router {
 
     // Initialize user position account
     pub fn initialize_user_position(
-        ctx: Context<InitializeUserPosition>
+        ctx: Context<InitializeUserPosition>  
     ) -> Result<()> {
         handler_initialize_user_position(ctx)
     }
 
-    pub fn initialize_loan(ctx: Context<InitializeLoan>, borrow_asset: Pubkey, collateral_asset: Pubkey) -> Result<()> {
-        handler_initialize_loan(ctx, borrow_asset, collateral_asset)
-    }
-    pub fn borrow(ctx: Context<Borrow>, shares_amount: u64, borrow_amount: u64) -> Result<(u64)> {
-        borrow_handler(ctx, shares_amount, borrow_amount)
-    }
-    pub fn repay(ctx: Context<Repay>, repay_amount: u64) -> Result<()> {
-        handler_repay(ctx, repay_amount)
-    }
+    // pub fn initialize_loan(ctx: Context<InitializeLoan>, borrow_asset: Pubkey, collateral_asset: Pubkey) -> Result<()> {
+    //     handler_initialize_loan(ctx, borrow_asset, collateral_asset)
+    // }
+    // pub fn borrow(ctx: Context<Borrow>, shares_amount: u64, borrow_amount: u64) -> Result<(u64)> {
+    //     borrow_handler(ctx, shares_amount, borrow_amount)
+    // }
+    // pub fn repay(ctx: Context<Repay>, repay_amount: u64) -> Result<()> {
+    //     handler_repay(ctx, repay_amount)
+    // }
 
-    pub fn invest_in_solend(
-        ctx: Context<InvestInSolend>,
-    ) -> Result<()> {
-        handler_invest_in_solend(ctx)
-    }
-    pub fn withdraw_from_solend(
-        ctx: Context<WithdrawFromSolend>,
-    ) -> Result<()> {
-        handler_withdraw_from_solend(ctx)
-    }
+    // pub fn invest_in_solend(
+    //     ctx: Context<InvestInSolend>,
+    // ) -> Result<()> {
+    //     handler_invest_in_solend(ctx)
+    // }
+    // pub fn withdraw_from_solend(
+    //     ctx: Context<WithdrawFromSolend>,
+    // ) -> Result<()> {
+    //     handler_withdraw_from_solend(ctx)
+    // }
 
 }

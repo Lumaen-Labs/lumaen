@@ -10,9 +10,6 @@ import * as fs from "fs";
 import * as path from "path";
 import * as readline from "readline";
 
-/* ──────────────────────────────────────────────
-   Types
-────────────────────────────────────────────── */
 interface DeploymentConfig {
   protocolState: web3.PublicKey;
   usdcMint: web3.PublicKey;
@@ -21,51 +18,20 @@ interface DeploymentConfig {
   solMarket: web3.PublicKey;
   programId: web3.PublicKey;
 }
-/* ──────────────────────────────────────────────
-   Helpers
-────────────────────────────────────────────── */
+
 function loadDeploymentConfig(): DeploymentConfig {
   const configPath = path.join(__dirname, "..", "deployment-config.json");
-  
-  try {
-    const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    
-    console.log("Raw config data:", JSON.stringify(data, null, 2));
-    
-    // Validate each field before creating PublicKey
-    const requiredFields = [
-      'protocolState',
-      'usdcMint',
-      'solMint',
-      'usdcMarket',
-      'solMarket',
-      'programId'
-    ];
-    
-    for (const field of requiredFields) {
-      if (!data[field]) {
-        throw new Error(`Missing or invalid field in deployment-config.json: ${field}`);
-      }
-    }
-    
-    return {
-      protocolState: new web3.PublicKey(data.protocolState),
-      usdcMint: new web3.PublicKey(data.usdcMint),
-      solMint: new web3.PublicKey(data.solMint),
-      usdcMarket: new web3.PublicKey(data.usdcMarket),
-      solMarket: new web3.PublicKey(data.solMarket),
-      programId: new web3.PublicKey(data.programId),
-    };
-  } catch (error: any) {
-    console.error("❌ Error loading deployment config:");
-    console.error(error.message);
-    throw error;
-  }
+  const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  return {
+    protocolState: new web3.PublicKey(data.protocolState),
+    usdcMint: new web3.PublicKey(data.usdcMint),
+    solMint: new web3.PublicKey(data.solMint),
+    usdcMarket: new web3.PublicKey(data.usdcMarket),
+    solMarket: new web3.PublicKey(data.solMarket),
+    programId: new web3.PublicKey(data.programId),
+  };
 }
 
-/* ──────────────────────────────────────────────
-   Manual Provider (no env vars)
-────────────────────────────────────────────── */
 function getManualProvider(): anchor.AnchorProvider {
   const connection = new web3.Connection("https://api.devnet.solana.com", "confirmed");
   const walletPath = path.join(process.env.HOME || ".", ".config", "solana", "id.json");
@@ -77,9 +43,6 @@ function getManualProvider(): anchor.AnchorProvider {
   return provider;
 }
 
-/* ──────────────────────────────────────────────
-   CLI Setup
-────────────────────────────────────────────── */
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
@@ -100,11 +63,6 @@ async function showMenu() {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 }
 
-/* ──────────────────────────────────────────────
-   USER OPERATIONS
-────────────────────────────────────────────── */
-
-
 async function deposit(
   program: Program<CoreRouter>,
   wallet: anchor.Wallet,
@@ -120,114 +78,111 @@ async function deposit(
   try {
     const connection = program.provider.connection;
     
-    console.log("Fetching user token account...");
     const userTokenAccount = await getOrCreateAssociatedTokenAccount(
       connection,
       wallet.payer,
       mint,
       wallet.publicKey
     );
-    console.log("User token account:", userTokenAccount.address.toString());
 
-    // Use the market PDA from config
-    const marketPda = isUSDC ? config.usdcMarket : config.solMarket;
-    console.log("Market PDA:", marketPda.toString());
+    // CRITICAL: Derive market from MINT, not from config
+    // This ensures consistency with how Anchor derives it
+    const [marketPda] = web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("market"), mint.toBuffer()],
+      program.programId
+    );
+    console.log("Market PDA (derived from mint):", marketPda.toString());
+    console.log("Market PDA (from config):", (isUSDC ? config.usdcMarket : config.solMarket).toString());
 
-    // Derive user position PDA - FIXED: use "user_account" not "user_position"
+    // Derive user position using the mint-derived market
     const [userPosition] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("user_account"), wallet.publicKey.toBuffer(), marketPda.toBuffer()],
       program.programId
     );
     console.log("User Position PDA:", userPosition.toString());
 
-    // Initialize user position if not exists
     try {
       await program.account.userPosition.fetch(userPosition);
-      console.log("User position already exists");
+      console.log("✅ User position exists");
     } catch (err) {
       console.log("Initializing user position...");
+      console.log("\n🔍 DEBUG - Account Types:");
+console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+// Check what mint actually is
+const mintInfo = await connection.getAccountInfo(mint);
+console.log("Mint account owner:", mintInfo?.owner.toString());
+console.log("Expected: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+
+// Check what market actually is  
+const marketInfo = await connection.getAccountInfo(marketPda);
+console.log("\nMarket account owner:", marketInfo?.owner.toString());
+console.log("Expected:", program.programId.toString());
+
+console.log("\nAccounts being passed:");
+console.log("  mint:", mint.toString());
+console.log("  market:", marketPda.toString());
+console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
       const initTx = await program.methods
-        .initializeUserPosition()
+        .initializeUserPosition(marketPda)
         .accounts({
           signer: wallet.publicKey,
-          market: marketPda,
-          userAccount: userPosition,
+          userAccount:userPosition,
           systemProgram: web3.SystemProgram.programId,
         }as any)
         .rpc();
-      console.log("User position initialized:", initTx);
-      
-      // Wait for confirmation
+      console.log("✅ User position initialized:", initTx);
       await connection.confirmTransaction(initTx, "confirmed");
-      console.log("User position initialization confirmed");
     }
 
     const depositAmount = new BN(amount * 10 ** decimals);
-    console.log("Deposit amount (raw):", depositAmount.toString());
     
-    // Derive supply vault PDA
     const [supplyVault] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("supply_vault"), marketPda.toBuffer()],
       program.programId
     );
-    console.log("Supply Vault PDA:", supplyVault.toString());
     
-    console.log("Submitting deposit transaction...");
+    console.log("Submitting deposit with:");
+    console.log("  - Market:", marketPda.toString());
+    console.log("  - User Position:", userPosition.toString());
+    console.log("  - Supply Vault:", supplyVault.toString());
+    
     const tx = await program.methods
       .deposit(depositAmount)
-      .accounts({
+      .accountsPartial({
         signer: wallet.publicKey,
         mint: mint,
         market: marketPda,
         userTokenAccount: userTokenAccount.address,
         supplyVault: supplyVault,
-        userPosition: userPosition,
+        userAccount: userPosition,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: web3.SystemProgram.programId,
-      }as any)
+      })
       .rpc();
 
     console.log("✅ Deposit successful!");
     console.log(`   → https://explorer.solana.com/tx/${tx}?cluster=devnet`);
   } catch (error: any) {
-    console.error("❌ Deposit failed:");
-    console.error("Error message:", error.message);
-    if (error.logs) {
-      console.error("Error logs:", error.logs);
-    }
-    if (error.stack) {
-      console.error("Stack trace:", error.stack);
-    }
+    console.error("❌ Deposit failed:", error.message);
+    if (error.logs) console.error("Logs:", error.logs);
     throw error;
   }
 }
-/* ──────────────────────────────────────────────
-   MAIN LOOP
-────────────────────────────────────────────── */
+
 async function main() {
   try {
-    console.log("Loading deployment config...");
     const baseConfig = loadDeploymentConfig();
-    console.log("Config loaded successfully");
-
-    console.log("Setting up provider...");
     const provider = getManualProvider();
-    console.log("Provider setup complete");
-
-    console.log("Loading IDL...");
     const idlPath = path.join(__dirname, "../target/idl/core_router.json");
     const idl = JSON.parse(fs.readFileSync(idlPath, "utf-8"));
-    console.log("IDL loaded");
-
-    console.log("Initializing program...");
     const program = new anchor.Program(idl, provider) as Program<CoreRouter>;
     const wallet = provider.wallet as anchor.Wallet;
 
     console.log("\n🏦 Connected to Core Protocol");
     console.log("Wallet:", wallet.publicKey.toString());
     console.log("Program:", program.programId.toString());
-    console.log("Cluster: Devnet\n");
 
     while (true) {
       await showMenu();
@@ -235,8 +190,7 @@ async function main() {
 
       switch (choice) {
         case "1": {
-          const amountStr = await prompt("Enter USDC amount: ");
-          const amount = parseFloat(amountStr);
+          const amount = parseFloat(await prompt("Enter USDC amount: "));
           if (isNaN(amount) || amount <= 0) {
             console.log("❌ Invalid amount");
             break;
@@ -245,8 +199,7 @@ async function main() {
           break;
         }
         case "2": {
-          const amountStr = await prompt("Enter SOL amount: ");
-          const amount = parseFloat(amountStr);
+          const amount = parseFloat(await prompt("Enter SOL amount: "));
           if (isNaN(amount) || amount <= 0) {
             console.log("❌ Invalid amount");
             break;
@@ -262,14 +215,11 @@ async function main() {
           rl.close();
           process.exit(0);
         default:
-          console.log("Invalid option, please try again.");
+          console.log("Invalid option");
       }
     }
   } catch (err: any) {
-    console.error("\n❌ Error:", err.message || err);
-    if (err.stack) {
-      console.error("Stack trace:", err.stack);
-    }
+    console.error("\n❌ Error:", err.message);
     rl.close();
     process.exit(1);
   }

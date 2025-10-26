@@ -37,22 +37,27 @@ async function loadConfig(): Promise<DeploymentConfig | null> {
 async function deploy() {
   console.log("🚀 Deploying Protocol to Devnet...\n");
 
-  const provider = anchor.AnchorProvider.env();
+  const connection = new web3.Connection("https://api.devnet.solana.com", "confirmed");
+  const walletPath = path.join(process.env.HOME || ".", ".config", "solana", "id.json");
+  const secret = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
+  const keypair = web3.Keypair.fromSecretKey(Uint8Array.from(secret));
+  const wallet = new anchor.Wallet(keypair);
+  const provider = new anchor.AnchorProvider(connection, wallet, { commitment: "confirmed" });
   anchor.setProvider(provider);
 
-  const program = anchor.workspace.CoreRouter as Program<CoreRouter>;
-  const wallet = provider.wallet as anchor.Wallet;
-  const connection = provider.connection;
+  const idlPath = path.join(__dirname, "../target/idl/core_router.json");
+  const idl = JSON.parse(fs.readFileSync(idlPath, "utf-8"));
+  const program = new anchor.Program(idl, provider) as Program<CoreRouter>;
 
-  console.log("📍 Deployer:", wallet.publicKey.toString());
+  console.log("📍 Deployer:", keypair.publicKey.toString());
   console.log("📍 Program:", program.programId.toString());
 
-  const balance = await connection.getBalance(wallet.publicKey);
+  const balance = await connection.getBalance(keypair.publicKey);
   console.log("💰 Balance:", balance / web3.LAMPORTS_PER_SOL, "SOL\n");
 
   if (balance < 0.5 * web3.LAMPORTS_PER_SOL) {
     console.log("⚠️  Low balance! Run:");
-    console.log(`solana airdrop 2 ${wallet.publicKey} --url devnet\n`);
+    console.log(`solana airdrop 2 ${keypair.publicKey} --url devnet\n`);
     process.exit(1);
   }
 
@@ -66,10 +71,10 @@ async function deploy() {
   console.log("📦 Creating Token Mints");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-  const usdcMint = await createMint(connection, wallet.payer, wallet.publicKey, null, 6);
+  const usdcMint = await createMint(connection, keypair, keypair.publicKey, null, 6);
   console.log("✅ USDC Mint:", usdcMint.toString());
 
-  const solMint = await createMint(connection, wallet.payer, wallet.publicKey, null, 9);
+  const solMint = await createMint(connection, keypair, keypair.publicKey, null, 9);
   console.log("✅ SOL Mint:", solMint.toString());
 
   console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -118,14 +123,14 @@ async function deploy() {
   } catch {
     const tx = await program.methods
       .initializeProtocol()
-      .accounts({ admin: wallet.publicKey, feeCollector: feeCollector.publicKey })
+      .accounts({ 
+        admin: keypair.publicKey, 
+        feeCollector: feeCollector.publicKey 
+      })
       .rpc();
     console.log("✅ Initialized Protocol! TX:", tx);
   }
 
-  // ────────────────────────────────────────────────
-  // USDC Market Initialization
-  // ────────────────────────────────────────────────
   console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("💵 Initializing USDC Market");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -153,21 +158,18 @@ async function deploy() {
     const tx = await program.methods
       .initializeMarket(config)
       .accounts({
-        owner: wallet.publicKey,
+        owner: keypair.publicKey,
         protocolState,
-        underlyingMint: usdcMint,
+        mint: usdcMint,
         market: usdcMarket,
         supplyVault: usdcSupplyVault,
         tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
+      }as any)
       .rpc();
     console.log("✅ Initialized USDC Market! TX:", tx);
   }
 
-  // ────────────────────────────────────────────────
-  // SOL Market Initialization
-  // ────────────────────────────────────────────────
   console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("☀️  Initializing SOL Market");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -181,9 +183,9 @@ async function deploy() {
       liquidationThreshold: new BN(7500),
       liquidationPenalty: new BN(500),
       reserveFactor: new BN(1000),
-      minDepositAmount: new BN(100_000_000),
+      minDepositAmount: new BN(100),
       maxDepositAmount: new BN(10_000_000_000_000),
-      minBorrowAmount: new BN(100_000_000),
+      minBorrowAmount: new BN(100),
       maxBorrowAmount: new BN(1_000_000_000_000),
       depositFee: new BN(0),
       withdrawFee: new BN(0),
@@ -195,21 +197,18 @@ async function deploy() {
     const tx = await program.methods
       .initializeMarket(config)
       .accounts({
-        owner: wallet.publicKey,
+        owner: keypair.publicKey,
         protocolState,
-        underlyingMint: solMint,
+        mint: solMint,
         market: solMarket,
         supplyVault: solSupplyVault,
         tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
+      }as any)
       .rpc();
     console.log("✅ Initialized SOL Market! TX:", tx);
   }
 
-  // ────────────────────────────────────────────────
-  // Save deployment info
-  // ────────────────────────────────────────────────
   const deploymentConfig: DeploymentConfig = {
     protocolState: protocolState.toString(),
     usdcMint: usdcMint.toString(),
@@ -224,7 +223,6 @@ async function deploy() {
   console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("✅ DEPLOYMENT COMPLETE!");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-  console.log("Run: ts-node scripts/user-operations.ts\n");
 
   return deploymentConfig;
 }
