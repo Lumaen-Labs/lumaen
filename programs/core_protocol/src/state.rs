@@ -268,7 +268,7 @@ pub struct Loan {
 
     // L3 Integration (for spending loans in DeFi)
     pub current_market: Pubkey,          // Where is the loan currently?
-    pub current_amount: u64,             // How much underlying is there?
+    pub current_position_value: u64,             // How much underlying is there?
     pub l3_integration: Pubkey,          // Which protocol is it in?
     pub l3_shares_received: u64,         // Amount of shares/cTokens received from L3
     pub current_spent_u8: u8,            // Status: 0=NotSpent, 1=InSolend, 2=InOtherProtocol

@@ -124,7 +124,7 @@ console.log("  mint:", mint.toString());
 console.log("  market:", marketPda.toString());
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
       const initTx = await program.methods
-        .initializeUserPosition(marketPda)
+        .initializeUserPosition(marketPda1)
         .accounts({
           signer: wallet.publicKey,
           userAccount:userPosition,

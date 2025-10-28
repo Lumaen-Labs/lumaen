@@ -19,14 +19,15 @@ pub mod core_router {
     use super::*;
 
     // Deposit tokens and receive shares in return
+
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<u64> {
         deposit_handler(ctx, amount)
     }
 
-    // Withdraw tokens by burning shares
-    // pub fn withdraw(ctx: Context<Withdraw>, shares: u64) -> Result<()> {
-    //     withdraw_handler(ctx, shares)
-    // }
+    //Withdraw tokens by burning shares
+    pub fn withdraw(ctx: Context<Withdraw>, shares: u64) -> Result<()> {
+        withdraw_handler(ctx, shares)
+    }
 
     // Initialize the protocol state
     pub fn initialize_protocol(ctx: Context<InitializeProtocol>) -> Result<()> {
@@ -48,12 +49,12 @@ pub mod core_router {
     // pub fn initialize_loan(ctx: Context<InitializeLoan>, borrow_asset: Pubkey, collateral_asset: Pubkey) -> Result<()> {
     //     handler_initialize_loan(ctx, borrow_asset, collateral_asset)
     // }
-    // pub fn borrow(ctx: Context<Borrow>, shares_amount: u64, borrow_amount: u64) -> Result<(u64)> {
-    //     borrow_handler(ctx, shares_amount, borrow_amount)
-    // }
-    // pub fn repay(ctx: Context<Repay>, repay_amount: u64) -> Result<()> {
-    //     handler_repay(ctx, repay_amount)
-    // }
+    pub fn borrow(ctx: Context<Borrow>, shares_amount: u64, borrow_amount: u64) -> Result<(u64)> {
+        borrow_handler(ctx, shares_amount, borrow_amount)
+    }
+    pub fn repay(ctx: Context<Repay>, repay_amount: u64) -> Result<()> {
+        handler_repay(ctx, repay_amount)
+    }
 
     // pub fn invest_in_solend(
     //     ctx: Context<InvestInSolend>,
