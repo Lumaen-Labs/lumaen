@@ -303,8 +303,7 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{
     self, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
-use pyth_solana_receiver_sdk::price_update::{get_feed_id_from_hex, PriceUpdateV2};
-use hex;
+use pyth_solana_receiver_sdk::price_update::{PriceUpdateV2,get_feed_id_from_hex};
 
 
 // #[derive(Accounts)]
@@ -376,7 +375,7 @@ pub struct Borrow<'info>{
         seeds = [b"protocol_state"],
         bump
     )]
-    pub protocol_state: Account<'info, ProtocolState>,
+    pub protocol_state: Box<Account<'info, ProtocolState>>,
 
     // Collateral market (e.g., USDC) for updating  
     #[account(
@@ -384,7 +383,7 @@ pub struct Borrow<'info>{
         seeds = [b"market", collateral_mint.key().as_ref()],
         bump
     )]
-    pub collateral_market: Account<'info, Market>,
+    pub collateral_market: Box<Account<'info, Market>>,
 
     #[account(
         mut,
@@ -392,14 +391,14 @@ pub struct Borrow<'info>{
         bump ,
         constraint = !borrow_market.paused @ LendingError::MarketPaused,
     )]
-    pub borrow_market: Account<'info, Market>,
+    pub borrow_market: Box<Account<'info, Market>>,
 
     #[account(
         mut,
         seeds = [b"user_account", borrower.key().as_ref(), collateral_market.key().as_ref()],
         bump,
     )]
-    pub collateral_position: Account<'info, UserPosition>,
+    pub collateral_position: Box<Account<'info, UserPosition>>,
     
     // #[account(
     //     mut,
@@ -415,10 +414,11 @@ pub struct Borrow<'info>{
         seeds = [b"loan", collateral_market.key().as_ref(), borrow_market.key().as_ref(), borrower.key().as_ref()],
         bump,
     )]
-    pub loan: Account<'info, Loan>,
+    pub loan: Box<Account<'info, Loan>>,
 
     pub token_program: Interface<'info, TokenInterface>,
-    pub price_update: Account<'info, PriceUpdateV2>,
+    pub price_update_col: Account<'info, PriceUpdateV2>,
+    pub price_update_borrow: Account<'info, PriceUpdateV2>,
     pub system_program: Program<'info, System>,
 }
 
@@ -479,23 +479,21 @@ pub fn borrow_handler(
     // ========================================================================
     // STEP 5: Get prices from Pyth Oracle
     // ========================================================================
-    let price_update = &ctx.accounts.price_update;
+    let price_update_col = &ctx.accounts.price_update_col;
+    let price_update_borrow = &ctx.accounts.price_update_borrow;
     
     // Get collateral price using feed ID from market state
-    let collateral_feed_id = get_feed_id_from_hex(
-        &hex::encode(collateral_market.pyth_feed_id)
-    )?;
-    let collateral_price_data = price_update.get_price_no_older_than(
-        &clock, 
-        MAXIMUM_AGE, 
-        &collateral_feed_id
-    )?;
+    let collateral_feed_id = collateral_market.pyth_feed_id;
+    // msg!("Collateral Feed ID: {}", hex::encode(collateral_market.pyth_feed_id));
+    let collateral_price_data = price_update_col.get_price_no_older_than(
+    &clock, 
+    MAXIMUM_AGE, 
+    &collateral_feed_id
+  )?;
     
     // Get borrow asset price
-    let borrow_feed_id = get_feed_id_from_hex(
-        &hex::encode(borrow_market.pyth_feed_id)
-    )?;
-    let borrow_price_data = price_update.get_price_no_older_than(
+    let borrow_feed_id = borrow_market.pyth_feed_id;
+    let borrow_price_data = price_update_borrow.get_price_no_older_than(
         &clock, 
         MAXIMUM_AGE, 
         &borrow_feed_id

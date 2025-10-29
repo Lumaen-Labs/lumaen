@@ -11,6 +11,9 @@ import * as path from "path";
 import * as os from "os";
 import { CoreRouter } from "../target/types/core_router"; // Replace 'core_protocol' with your actual program name from Anchor.toml
 import { PythSolanaReceiver } from "@pythnetwork/pyth-solana-receiver";
+import { HermesClient } from "@pythnetwork/hermes-client";
+import { Connection, PublicKey } from "@solana/web3.js";
+
 
 async function main() {
   // Set up provider for Devnet
@@ -32,37 +35,78 @@ async function main() {
   // Load program (replace with your actual IDL path and program name)
   const idl = JSON.parse(fs.readFileSync("./target/idl/core_router.json", "utf8")); // Replace with your IDL file name
   const program = new Program(idl, provider) as Program<CoreRouter>;
-//   const pythReceiver = new anchor.web3.PublicKey("7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE");
-//   const connection: anchor.web3.Connection = provider.connection;
-//   const wallet: Wallet = provider.wallet;
-  const pythSolanaReceiver = new PythSolanaReceiver({ connection, wallet });
- 
+
+  // 1) Fetch the Hermes-signed update for the feed
+  const hermes = new HermesClient("https://hermes.pyth.network/");
+  console.log("Fetching price update from Hermes for SOL feed...");
+
+  // const pythSolanaReceiver = new PythSolanaReceiver({ connection, wallet });
+  const pythSolanaReceiver = new PythSolanaReceiver({
+  connection: new Connection("https://api.devnet.solana.com"),
+  wallet: wallet,
+} as any);
+
+  // const USDC_PRICE_FEED_ACCOUNT = "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX";
+  // const USDT_PRICE_FEED_ACCOUNT = "HT2PLQBcG5EiCcNSaMHAjSgd9F98ecpATbk4Sk5oYuM";
+
   // Pyth feed IDs
-  const usdcFeedId = Buffer.from("41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722", "hex");
-  const usdtFeedId = Buffer.from("1fc18861232290221461220bd4e2acd1dCDFbc89c84092c93c18bdc7756c1588", "hex");
+  const usdcFeedId = Buffer.from("eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a", "hex");
+  const usdtFeedId = Buffer.from("2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b", "hex");
+  const solFeedId = Buffer.from("ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d", "hex");
 
   const SOL_PRICE_FEED_ID =
     "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a";
+  const USDC_PRICE_FEED_ID ="0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a";
+  const USDT_PRICE_FEED_ID ="0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b";
 
-   const solUsdPriceFeedAccount = pythSolanaReceiver
+   const USDCUsdPriceFeedAccount = pythSolanaReceiver
+  .getPriceFeedAccountAddress(0,USDC_PRICE_FEED_ID )
+  .toBase58();
+  const USDTUsdPriceFeedAccount = pythSolanaReceiver
+  .getPriceFeedAccountAddress(0,USDT_PRICE_FEED_ID )
+  .toBase58();
+
+
+  const SolUsdPriceFeedAccount =  pythSolanaReceiver
   .getPriceFeedAccountAddress(0,SOL_PRICE_FEED_ID )
   .toBase58();
 
-  // Calculate PriceUpdateV2 PDAs
-//   const [usdcPriceUpdatePda] = anchor.web3.PublicKey.findProgramAddressSync(
-//     [Buffer.from("price_account"), usdcFeedId],
-//     pythReceiver
-//   );
+  console.log("USDC Price Feed Account:", USDCUsdPriceFeedAccount);
+  console.log("USDT Price Feed Account:", USDTUsdPriceFeedAccount);
+  console.log("SOL Price Feed Account:", SolUsdPriceFeedAccount);
 
-//   const [usdtPriceUpdatePda] = anchor.web3.PublicKey.findProgramAddressSync(
-//     [Buffer.from("price_account"), usdtFeedId],
-//     pythReceiver
-//   );
+const priceUpdatePayload = (
+    await hermes.getLatestPriceUpdates([SOL_PRICE_FEED_ID], { encoding: "base64" })
+  ).binary.data; // this is an array of base64 strings (one per feed)
+
+
+//   // 2) Build transaction to post the update via PythSolanaReceiver
+//   const txBuilder = pythSolanaReceiver.newTransactionBuilder({ closeUpdateAccounts: false });
+//   await txBuilder.addPostPriceUpdates(priceUpdatePayload);
+
+
+  //  // 3) Build and send the versioned transactions (will create the PriceUpdateV2 PDA)
+  // const versionedTxs = await txBuilder.buildVersionedTransactions({
+  //   computeUnitPriceMicroLamports: 50_000,
+  // });
+  // await pythSolanaReceiver.provider.sendAll(versionedTxs, { skipPreflight: true });
+  // console.log("Posted PriceUpdate to chain via PythSolanaReceiver.");
+
+  // // 4) Derive the PriceUpdateV2 PDA that the receiver created for this feed
+  // // Use the same derive helper the receiver exposes:
+  // const [solPriceUpdatePda] =  pythSolanaReceiver.getPriceUpdateAccount(SOL_PRICE_FEED_ID);
+  // console.log("Derived PriceUpdate PDA:", solPriceUpdatePda.toBase58());
+
+  // // Optional sanity check: ensure account exists on the banksClient connection
+  // const info = await connection.getAccountInfo(solPriceUpdatePda);
+  // console.log("PriceUpdate account on chain exists:", !!info);
+
+
 
 //   console.log("USDC Price Update PDA:", usdcPriceUpdatePda.toBase58());
 //   console.log("USDT Price Update PDA:", usdtPriceUpdatePda.toBase58());
 
-  // Step 1: Initialize Protocol
+ // Step 1: Initialize Protocol
   const [protocolStatePda] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("protocol_state")],
     program.programId
@@ -152,7 +196,7 @@ async function main() {
     withdrawFee: new BN(0),
     borrowFee: new BN(0),
     repayFee: new BN(0),
-    pythFeedId: Array.from(usdcFeedId), // Pass as array
+    pythFeedId: Array.from(solFeedId),
   };
   const marketConfig2 = {
     maxLtv: new BN(60000),
@@ -167,7 +211,7 @@ async function main() {
     withdrawFee: new BN(0),
     borrowFee: new BN(0),
     repayFee: new BN(0),
-    pythFeedId: Array.from(usdtFeedId), // Pass as array
+    pythFeedId: Array.from(solFeedId), // Pass as array
   };
 
   try {
@@ -393,8 +437,8 @@ async function main() {
         collateralPosition: userAccountPda1,
         loan: loanPda,
         tokenProgram: TOKEN_PROGRAM_ID,
-        priceUpdate: solUsdPriceFeedAccount,  // For collateral (USDC)
-        // Add if program expects separate: borrowPriceUpdate: usdtPriceUpdatePda,
+        priceUpdateCol: SolUsdPriceFeedAccount,  // For collateral (USDC)
+        priceUpdateBorrow: SolUsdPriceFeedAccount,
         systemProgram: anchor.web3.SystemProgram.programId,
       } as any)
       .rpc();

@@ -208,6 +208,7 @@ pub fn handler_initialize_market(
     market.withdraw_fee = config.withdraw_fee;
     market.borrow_fee = config.borrow_fee;
     market.repay_fee = config.repay_fee;
+    market.pyth_feed_id = config.pyth_feed_id;
 
     // Interest rate model from config
     // market.base_rate = config.base_rate;

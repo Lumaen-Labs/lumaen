@@ -1,228 +1,562 @@
+// // Correct feed IDs (remove 0x prefix if present; use plain hex strings)
+// const SOL_PRICE_FEED_ID = "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d";  // Correct SOL/USD
+// const USDC_PRICE_FEED_ID = "eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a";  // USDC/USD (unused here, but for reference)
+// const USDT_PRICE_FEED_ID = "2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b";  // USDT/USD
+
+// // Pyth feed IDs as Buffers (unchanged, but ensure consistency)
+// const usdcFeedId = Buffer.from(USDC_PRICE_FEED_ID, "hex");
+// const usdtFeedId = Buffer.from(USDT_PRICE_FEED_ID, "hex");
+// const solFeedId = Buffer.from(SOL_PRICE_FEED_ID, "hex");
+
+// // PythSolanaReceiver setup (use your main provider for consistency)
+// const pythSolanaReceiver = new PythSolanaReceiver({
+//   connection: connection,  // Reuse your devnet connection
+//   wallet: wallet,
+// });
+
+// // Derive price feed accounts (these are the persistent accounts your program reads)
+// const solUsdPriceFeedAccount = pythSolanaReceiver
+//   .getPriceFeedAccountAddress(0, SOL_PRICE_FEED_ID)
+//   .toBase58();
+
+// const usdtUsdPriceFeedAccount = pythSolanaReceiver
+//   .getPriceFeedAccountAddress(0, USDT_PRICE_FEED_ID)
+//   .toBase58();
+
+// console.log("SOL Price Feed Account:", solUsdPriceFeedAccount);
+// console.log("USDT Price Feed Account:", usdtUsdPriceFeedAccount);
+
+// // 1) Fetch the Hermes-signed updates for both feeds
+// const hermes = new HermesClient("https://hermes.pyth.network/");
+// console.log("Fetching price updates from Hermes for SOL and USDT feeds...");
+// const priceUpdatePayload = (
+//   await hermes.getLatestPriceUpdates([SOL_PRICE_FEED_ID, USDT_PRICE_FEED_ID], { encoding: "base64" })
+// ).binary.data;  // Array of base64 strings (one per feed)
+
+// // 2) Build transaction to post the updates via PythSolanaReceiver
+// const txBuilder = pythSolanaReceiver.newTransactionBuilder({ closeUpdateAccounts: false });
+// await txBuilder.addPostPriceUpdates(priceUpdatePayload);  // Posts to both feeds
+
+// // 3) Build and send the versioned transactions (this creates/updates the PriceFeed accounts)
+// const versionedTxs = await txBuilder.buildVersionedTransactions({
+//   computeUnitPriceMicroLamports: 50_000,  // Adjust if needed for priority fees
+// });
+// await pythSolanaReceiver.provider.sendAll(versionedTxs, { skipPreflight: true });
+// console.log("Posted PriceUpdates to chain via PythSolanaReceiver.");
+
+// // Optional: Verify the accounts now have data
+// const solInfo = await connection.getAccountInfo(new PublicKey(solUsdPriceFeedAccount));
+// console.log("SOL PriceFeed account exists:", !!solInfo);
+// const usdtInfo = await connection.getAccountInfo(new PublicKey(usdtUsdPriceFeedAccount));
+// console.log("USDT PriceFeed account exists:", !!usdtInfo);
+
+
+
+
+
 import * as anchor from "@coral-xyz/anchor";
-import { Program, BN, web3 } from "@coral-xyz/anchor";
+import { Program, BN } from "@coral-xyz/anchor";
+import { createMint, createAssociatedTokenAccount, mintTo } from "@solana/spl-token";
 import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getOrCreateAssociatedTokenAccount,
 } from "@solana/spl-token";
-import { CoreRouter } from "../target/types/core_router";
 import * as fs from "fs";
 import * as path from "path";
-import * as readline from "readline";
+import * as os from "os";
+import { CoreRouter } from "../target/types/core_router"; // Replace 'core_protocol' with your actual program name from Anchor.toml
+import { PythSolanaReceiver } from "@pythnetwork/pyth-solana-receiver";
+import { HermesClient } from "@pythnetwork/hermes-client";
+import { Connection, PublicKey } from "@solana/web3.js";
 
-interface DeploymentConfig {
-  protocolState: web3.PublicKey;
-  usdcMint: web3.PublicKey;
-  solMint: web3.PublicKey;
-  usdcMarket: web3.PublicKey;
-  solMarket: web3.PublicKey;
-  programId: web3.PublicKey;
-}
-
-function loadDeploymentConfig(): DeploymentConfig {
-  const configPath = path.join(__dirname, "..", "deployment-config.json");
-  const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-  return {
-    protocolState: new web3.PublicKey(data.protocolState),
-    usdcMint: new web3.PublicKey(data.usdcMint),
-    solMint: new web3.PublicKey(data.solMint),
-    usdcMarket: new web3.PublicKey(data.usdcMarket),
-    solMarket: new web3.PublicKey(data.solMarket),
-    programId: new web3.PublicKey(data.programId),
-  };
-}
-
-function getManualProvider(): anchor.AnchorProvider {
-  const connection = new web3.Connection("https://api.devnet.solana.com", "confirmed");
-  const walletPath = path.join(process.env.HOME || ".", ".config", "solana", "id.json");
-  const secret = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
-  const keypair = web3.Keypair.fromSecretKey(Uint8Array.from(secret));
-  const wallet = new anchor.Wallet(keypair);
-  const provider = new anchor.AnchorProvider(connection, wallet, { commitment: "confirmed" });
-  anchor.setProvider(provider);
-  return provider;
-}
-
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
-
-function prompt(question: string): Promise<string> {
-  return new Promise((resolve) => rl.question(question, resolve));
-}
-
-async function showMenu() {
-  console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("🏦 CORE PROTOCOL - USER OPERATIONS");
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("1. 💰 Deposit USDC");
-  console.log("2. ☀️  Deposit SOL");
-  console.log("3. 📊 View My Positions");
-  console.log("9. ❌ Exit");
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-}
-
-async function deposit(
-  program: Program<CoreRouter>,
-  wallet: anchor.Wallet,
-  config: DeploymentConfig,
-  mint: web3.PublicKey,
-  amount: number,
-  decimals: number
-) {
-  const isUSDC = mint.equals(config.usdcMint);
-  const marketName = isUSDC ? "USDC" : "SOL";
-  console.log(`\n💰 Depositing ${amount} ${marketName}...`);
-
-  try {
-    const connection = program.provider.connection;
-    
-    const userTokenAccount = await getOrCreateAssociatedTokenAccount(
-      connection,
-      wallet.payer,
-      mint,
-      wallet.publicKey
-    );
-
-    // CRITICAL: Derive market from MINT, not from config
-    // This ensures consistency with how Anchor derives it
-    const [marketPda] = web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("market"), mint.toBuffer()],
-      program.programId
-    );
-    console.log("Market PDA (derived from mint):", marketPda.toString());
-    console.log("Market PDA (from config):", (isUSDC ? config.usdcMarket : config.solMarket).toString());
-
-    // Derive user position using the mint-derived market
-    const [userPosition] = web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("user_account"), wallet.publicKey.toBuffer(), marketPda.toBuffer()],
-      program.programId
-    );
-    console.log("User Position PDA:", userPosition.toString());
-
-    try {
-      await program.account.userPosition.fetch(userPosition);
-      console.log("✅ User position exists");
-    } catch (err) {
-      console.log("Initializing user position...");
-      console.log("\n🔍 DEBUG - Account Types:");
-console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-
-// Check what mint actually is
-const mintInfo = await connection.getAccountInfo(mint);
-console.log("Mint account owner:", mintInfo?.owner.toString());
-console.log("Expected: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-
-// Check what market actually is  
-const marketInfo = await connection.getAccountInfo(marketPda);
-console.log("\nMarket account owner:", marketInfo?.owner.toString());
-console.log("Expected:", program.programId.toString());
-
-console.log("\nAccounts being passed:");
-console.log("  mint:", mint.toString());
-console.log("  market:", marketPda.toString());
-console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-      const initTx = await program.methods
-        .initializeUserPosition(marketPda1)
-        .accounts({
-          signer: wallet.publicKey,
-          userAccount:userPosition,
-          systemProgram: web3.SystemProgram.programId,
-        }as any)
-        .rpc();
-      console.log("✅ User position initialized:", initTx);
-      await connection.confirmTransaction(initTx, "confirmed");
-    }
-
-    const depositAmount = new BN(amount * 10 ** decimals);
-    
-    const [supplyVault] = web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("supply_vault"), marketPda.toBuffer()],
-      program.programId
-    );
-    
-    console.log("Submitting deposit with:");
-    console.log("  - Market:", marketPda.toString());
-    console.log("  - User Position:", userPosition.toString());
-    console.log("  - Supply Vault:", supplyVault.toString());
-    
-    const tx = await program.methods
-      .deposit(depositAmount)
-      .accountsPartial({
-        signer: wallet.publicKey,
-        mint: mint,
-        market: marketPda,
-        userTokenAccount: userTokenAccount.address,
-        supplyVault: supplyVault,
-        userAccount: userPosition,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        systemProgram: web3.SystemProgram.programId,
-      })
-      .rpc();
-
-    console.log("✅ Deposit successful!");
-    console.log(`   → https://explorer.solana.com/tx/${tx}?cluster=devnet`);
-  } catch (error: any) {
-    console.error("❌ Deposit failed:", error.message);
-    if (error.logs) console.error("Logs:", error.logs);
-    throw error;
-  }
-}
 
 async function main() {
+  // Set up provider for Devnet
+  const connection = new anchor.web3.Connection(anchor.web3.clusterApiUrl("devnet"), "confirmed");
+  console.log("Connected to Devnet");
+
+  // Load wallet (assuming ~/.config/solana/id.json)
+  const walletPath = path.join(os.homedir(), ".config", "solana", "id.json");
+  const walletKeypair = anchor.web3.Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(fs.readFileSync(walletPath, "utf-8")))
+  );
+  const wallet = new anchor.Wallet(walletKeypair);
+
+  const provider = new anchor.AnchorProvider(connection, wallet, {
+    commitment: "confirmed",
+  });
+  anchor.setProvider(provider);
+
+  // Load program (replace with your actual IDL path and program name)
+  const idl = JSON.parse(fs.readFileSync("./target/idl/core_router.json", "utf8")); // Replace with your IDL file name
+  const program = new Program(idl, provider) as Program<CoreRouter>;
+
+
+  // Correct feed IDs (remove 0x prefix if present; use plain hex strings)
+const SOL_PRICE_FEED_ID = "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d";  // Correct SOL/USD
+const USDC_PRICE_FEED_ID = "eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a";  // USDC/USD (unused here, but for reference)
+const USDT_PRICE_FEED_ID = "2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b";  // USDT/USD
+
+// Pyth feed IDs as Buffers (unchanged, but ensure consistency)
+const usdcFeedId = Buffer.from(USDC_PRICE_FEED_ID, "hex");
+const usdtFeedId = Buffer.from(USDT_PRICE_FEED_ID, "hex");
+const solFeedId = Buffer.from(SOL_PRICE_FEED_ID, "hex");
+
+// PythSolanaReceiver setup (use your main provider for consistency)
+const pythSolanaReceiver = new PythSolanaReceiver({
+  connection: connection,  // Reuse your devnet connection
+  wallet: wallet,
+});
+
+// Derive price feed accounts (these are the persistent accounts your program reads)
+const solUsdPriceFeedAccount = pythSolanaReceiver
+  .getPriceFeedAccountAddress(0, SOL_PRICE_FEED_ID)
+  .toBase58();
+
+const usdtUsdPriceFeedAccount = pythSolanaReceiver
+  .getPriceFeedAccountAddress(0, USDT_PRICE_FEED_ID)
+  .toBase58();
+
+console.log("SOL Price Feed Account:", solUsdPriceFeedAccount);
+console.log("USDT Price Feed Account:", usdtUsdPriceFeedAccount);
+
+// 1) Fetch the Hermes-signed updates for both feeds
+const hermes = new HermesClient("https://hermes.pyth.network/");
+console.log("Fetching price updates from Hermes for SOL and USDT feeds...");
+const priceUpdatePayload = (
+  await hermes.getLatestPriceUpdates([SOL_PRICE_FEED_ID, USDT_PRICE_FEED_ID], { encoding: "base64" })
+).binary.data;  // Array of base64 strings (one per feed)
+
+// 2) Build transaction to post the updates via PythSolanaReceiver
+const txBuilder = pythSolanaReceiver.newTransactionBuilder({ closeUpdateAccounts: false });
+await txBuilder.addPostPriceUpdates(priceUpdatePayload);  // Posts to both feeds
+
+// 3) Build and send the versioned transactions (this creates/updates the PriceFeed accounts)
+const versionedTxs = await txBuilder.buildVersionedTransactions({
+  computeUnitPriceMicroLamports: 50_000,  // Adjust if needed for priority fees
+});
+await pythSolanaReceiver.provider.sendAll(versionedTxs, { skipPreflight: true });
+console.log("Posted PriceUpdates to chain via PythSolanaReceiver.");
+
+// Optional: Verify the accounts now have data
+const solInfo = await connection.getAccountInfo(new PublicKey(solUsdPriceFeedAccount));
+console.log("SOL PriceFeed account exists:", !!solInfo);
+const usdtInfo = await connection.getAccountInfo(new PublicKey(usdtUsdPriceFeedAccount));
+console.log("USDT PriceFeed account exists:", !!usdtInfo);
+
+
+
+ // Step 1: Initialize Protocol
+  const [protocolStatePda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("protocol_state")],
+    program.programId
+  );
+
+  const feeCollector = wallet.publicKey; // Use wallet as fee collector for simplicity
+
   try {
-    const baseConfig = loadDeploymentConfig();
-    const provider = getManualProvider();
-    const idlPath = path.join(__dirname, "../target/idl/core_router.json");
-    const idl = JSON.parse(fs.readFileSync(idlPath, "utf-8"));
-    const program = new anchor.Program(idl, provider) as Program<CoreRouter>;
-    const wallet = provider.wallet as anchor.Wallet;
-
-    console.log("\n🏦 Connected to Core Protocol");
-    console.log("Wallet:", wallet.publicKey.toString());
-    console.log("Program:", program.programId.toString());
-
-    while (true) {
-      await showMenu();
-      const choice = (await prompt("Select an option: ")).trim();
-
-      switch (choice) {
-        case "1": {
-          const amount = parseFloat(await prompt("Enter USDC amount: "));
-          if (isNaN(amount) || amount <= 0) {
-            console.log("❌ Invalid amount");
-            break;
-          }
-          await deposit(program, wallet, baseConfig, baseConfig.usdcMint, amount, 6);
-          break;
-        }
-        case "2": {
-          const amount = parseFloat(await prompt("Enter SOL amount: "));
-          if (isNaN(amount) || amount <= 0) {
-            console.log("❌ Invalid amount");
-            break;
-          }
-          await deposit(program, wallet, baseConfig, baseConfig.solMint, amount, 9);
-          break;
-        }
-        case "3":
-          console.log("📊 View Positions - Coming soon!");
-          break;
-        case "9":
-          console.log("\n👋 Goodbye!");
-          rl.close();
-          process.exit(0);
-        default:
-          console.log("Invalid option");
-      }
-    }
+    await program.account.protocolState.fetch(protocolStatePda);
+    console.log("⚠️  Protocol already initialized, skipping...");
   } catch (err: any) {
-    console.error("\n❌ Error:", err.message);
-    rl.close();
-    process.exit(1);
+    if (err.name === 'AccountDoesNotExistError' || err.toString().includes('Account does not exist')) {
+      try {
+        await program.methods
+          .initializeProtocol()
+          .accounts({
+            admin: wallet.publicKey,
+            feeCollector: feeCollector,
+            protocolState: protocolStatePda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .rpc();
+        console.log("Protocol initialized! PDA:", protocolStatePda.toBase58());
+      } catch (initErr) {
+        console.error("Error initializing protocol:", initErr);
+        return;
+      }
+    } else {
+      console.error("Error checking protocol state:", err);
+      return;
+    }
   }
+
+  // Fetch protocol state after init
+  const protocolData = await program.account.protocolState.fetch(protocolStatePda);
+  console.log("Protocol state data:", protocolData);
+
+  // Step 2: Create Mock Mint and Initialize Market
+  const mockMint1 = await createMint(
+    connection,
+    wallet.payer,
+    wallet.publicKey,
+    null,
+    9 // Decimals
+  );
+  console.log("Mock mint 1 created:", mockMint1.toBase58());
+
+  const mockMint2 = await createMint(
+    connection,
+    wallet.payer,
+    wallet.publicKey,
+    null,
+    6 // Decimals
+  );
+  console.log("Mock mint 2 created:", mockMint2.toBase58());  
+
+  const [marketPda1] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("market"), mockMint1.toBuffer()],
+    program.programId
+  );
+
+  const [marketPda2] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("market"), mockMint2.toBuffer()],
+    program.programId
+  );
+
+  const [supplyVaultPda1] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("supply_vault"), marketPda1.toBuffer()],
+    program.programId
+  );
+
+  const [supplyVaultPda2] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("supply_vault"), marketPda2.toBuffer()],
+    program.programId
+  );
+
+  const marketConfig1 = {
+    maxLtv: new BN(50000),
+    liquidationThreshold: new BN(52500),
+    liquidationPenalty: new BN(500),
+    reserveFactor: new BN(1000),
+    minDepositAmount: new BN(0),
+    maxDepositAmount: new BN(10000000).mul(new BN(10).pow(new BN(9))),
+    minBorrowAmount: new BN(0).mul(new BN(10).pow(new BN(9))),
+    maxBorrowAmount: new BN(5000000).mul(new BN(10).pow(new BN(9))),
+    depositFee: new BN(0),
+    withdrawFee: new BN(0),
+    borrowFee: new BN(0),
+    repayFee: new BN(0),
+    pythFeedId: Array.from(solFeedId),
+  };
+  const marketConfig2 = {
+    maxLtv: new BN(60000),
+    liquidationThreshold: new BN(62500),
+    liquidationPenalty: new BN(600),
+    reserveFactor: new BN(1500),
+    minDepositAmount: new BN(0),
+    maxDepositAmount: new BN(20000000).mul(new BN(10).pow(new BN(6))),
+    minBorrowAmount: new BN(200).mul(new BN(10).pow(new BN(6))),
+    maxBorrowAmount: new BN(10000000).mul(new BN(10).pow(new BN(6))),
+    depositFee: new BN(0),
+    withdrawFee: new BN(0),
+    borrowFee: new BN(0),
+    repayFee: new BN(0),
+    pythFeedId: Array.from(solFeedId), // Pass as array
+  };
+
+  try {
+    await program.account.market.fetch(marketPda1);
+    console.log("⚠️  Market already initialized, skipping...");
+  } catch (err: any) {
+    if (err.name === 'AccountDoesNotExistError' || err.toString().includes('Account does not exist')) {
+      try {
+        await program.methods
+          .initializeMarket(marketConfig1)
+          .accounts({
+            owner: wallet.publicKey,
+            protocolState: protocolStatePda,
+            mint: mockMint1,
+            market: marketPda1,
+            supplyVault: supplyVaultPda1,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .rpc();
+        console.log("Market initialized for mint:", mockMint1.toBase58());
+      } catch (initErr) {
+        console.error("Error initializing market:", initErr);
+        return;
+      }
+    } else {
+      console.error("Error checking market:", err);
+      return;
+    }
+  }
+
+  // Fetch market1 data
+//   const market1Data = await program.account.market.fetch(marketPda1);
+//   console.log("Market1 data:", market1Data);
+
+  try {
+    await program.account.market.fetch(marketPda2);
+    console.log("⚠️  Market already initialized, skipping...");
+  } catch (err: any) {
+    if (err.name === 'AccountDoesNotExistError' || err.toString().includes('Account does not exist')) {
+      try {
+        await program.methods
+          .initializeMarket(marketConfig2)
+          .accounts({
+            owner: wallet.publicKey,
+            protocolState: protocolStatePda,
+            mint: mockMint2,
+            market: marketPda2,
+            supplyVault: supplyVaultPda2,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .rpc();
+        console.log("Market initialized for mint:", mockMint2.toBase58());
+      } catch (initErr) {
+        console.error("Error initializing market:", initErr);
+        return;
+      }
+    } else {
+      console.error("Error checking market:", err);
+      return;
+    }
+  }
+
+  // Fetch market2 data
+//   const market2Data = await program.account.market.fetch(marketPda2);
+//   console.log("Market2 data:", market2Data);
+
+
+  // Step 3: Prepare for Deposit - Create User ATA and Mint Tokens
+  const userTokenAccount1 = await createAssociatedTokenAccount(
+    connection,
+    wallet.payer,
+    mockMint1,
+    wallet.publicKey
+  );
+  console.log("User token account:", userTokenAccount1.toBase58());
+
+const mintAmount1 = new BN(100000).mul(new BN(10).pow(new BN(9)));// Mint 100000 tokens to user
+  await mintTo(
+    connection,
+    wallet.payer,
+    mockMint1,
+    userTokenAccount1,
+    wallet.publicKey,
+    mintAmount1.toNumber() // Use toNumber() if BN is not directly accepted
+  );
+  console.log("Minted", mintAmount1.toString(), "tokens to user");
+
+
+  const userTokenAccount2 = await createAssociatedTokenAccount(
+    connection,
+    wallet.payer,
+    mockMint2,
+    wallet.publicKey
+  );
+  console.log("User token account 2:", userTokenAccount2.toBase58());
+
+const mintAmount2 = new BN(2000000).mul(new BN(10).pow(new BN(6))); // Mint 2000000 tokens to user
+  await mintTo(
+    connection,
+    wallet.payer,
+    mockMint2,
+    userTokenAccount2,
+    wallet.publicKey,
+    mintAmount2.toNumber() // Use toNumber() if BN is not directly accepted
+  );
+  console.log("Minted", mintAmount2.toString(), "tokens to user");
+
+  // User Position PDA (will be init_if_needed)
+  const [userAccountPda1] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("user_account"), wallet.publicKey.toBuffer(), marketPda1.toBuffer()],
+    program.programId
+  );
+
+  const [userAccountPda2] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("user_account"), wallet.publicKey.toBuffer(), marketPda2.toBuffer()],
+    program.programId
+  );
+
+  // Step 4: Deposit
+  const depositAmount1 = new BN(1000).mul(new BN(10).pow(new BN(9)));
+
+  try {
+    await program.methods
+      .deposit(depositAmount1)
+      .accounts({
+        signer: wallet.publicKey, // user signing the transaction
+        mint: mockMint1,           // USDC , USDT
+        market: marketPda1,
+        userTokenAccount: userTokenAccount1,
+        supplyVault: supplyVaultPda1,
+        userAccount: userAccountPda1,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .rpc();
+    console.log("Deposit successful! Amount:", depositAmount1.toString());
+  } catch (err) {
+    console.error("Error during deposit:", err);
+  }
+
+
+  const depositAmount2 = new BN(2000000).mul(new BN(10).pow(new BN(6)));
+
+  try {
+    await program.methods
+      .deposit(depositAmount2)
+      .accounts({
+        signer: wallet.publicKey,
+        mint: mockMint2,
+        market: marketPda2,
+        userTokenAccount: userTokenAccount2,
+        supplyVault: supplyVaultPda2,
+        userAccount: userAccountPda2,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .rpc();
+    console.log("Deposit successful! Amount:", depositAmount2.toString());
+  } catch (err) {
+    console.error("Error during deposit:", err);
+  }
+
+  // Fetch after deposits
+  const postDepositMarket1 = await program.account.market.fetch(marketPda1);
+  console.log("Post-deposit Market1:", postDepositMarket1);
+
+  const postDepositUser1 = await program.account.userPosition.fetch(userAccountPda1);
+  console.log("Post-deposit User Position1:", postDepositUser1);
+
+  const postDepositMarket2 = await program.account.market.fetch(marketPda2);
+  console.log("Post-deposit Market2:", postDepositMarket2);
+
+  const postDepositUser2 = await program.account.userPosition.fetch(userAccountPda2);
+  console.log("Post-deposit User Position2:", postDepositUser2);
+
+
+
+//   const withdrawAmount = new BN(100);
+//   try {
+//     await program.methods
+//       .withdraw(withdrawAmount)
+//       .accounts({
+//         signer: wallet.publicKey,
+//         mint: mockMint,
+//         market: marketPda1,
+//         supplyVault: supplyVaultPda1,
+//         userTokenAccount: userTokenAccount,
+//         userAccount: userAccountPda,
+//         tokenProgram: TOKEN_PROGRAM_ID,
+//         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+//         systemProgram: anchor.web3.SystemProgram.programId,
+//       } as any)
+//       .rpc();
+//     console.log("Withdraw successful! Amount:", withdrawAmount.toString());
+//   } catch (err) {
+//     console.error("Error during withdraw:", err);
+//   }
+// }
+
+
+console.log("Re-fetching and posting fresh price updates...");
+const freshPriceUpdatePayload = (
+  await hermes.getLatestPriceUpdates([SOL_PRICE_FEED_ID, USDT_PRICE_FEED_ID], { encoding: "base64" })
+).binary.data;
+const freshTxBuilder = pythSolanaReceiver.newTransactionBuilder({ closeUpdateAccounts: false });
+await freshTxBuilder.addPostPriceUpdates(freshPriceUpdatePayload);
+const freshVersionedTxs = await freshTxBuilder.buildVersionedTransactions({
+  computeUnitPriceMicroLamports: 50_000,
+});
+await pythSolanaReceiver.provider.sendAll(freshVersionedTxs, { skipPreflight: true });
+console.log("Posted fresh PriceUpdates.");
+
+  // Borrow: Collateral from market1 (USDC), borrow from market2 (USDT)
+const sharesAmount = new BN(500).mul(new BN(10).pow(new BN(9)));  // 500 whole shares/units
+const borrowAmount = new BN(2500).mul(new BN(10).pow(new BN(6)));  // 2500 whole tokens
+
+  const [loanPda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("loan"), marketPda1.toBuffer(), marketPda2.toBuffer(), wallet.publicKey.toBuffer()],
+    program.programId
+  );
+
+  try {
+    await program.methods
+      .borrow(sharesAmount, borrowAmount)
+      .accounts({
+        borrower: wallet.publicKey,
+        collateralMint: mockMint1,
+        borrowMint: mockMint2,
+        protocolState: protocolStatePda,
+        collateralMarket: marketPda1,
+        borrowMarket: marketPda2,
+        collateralPosition: userAccountPda1,
+        loan: loanPda,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        priceUpdateCol: solUsdPriceFeedAccount,  // For collateral (USDC)
+        priceUpdateBorrow: solUsdPriceFeedAccount, // For borrow (USDT)
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .rpc();
+    console.log("Borrow successful! Borrowed:", borrowAmount.toString());
+  } catch (err) {
+    console.error("Error during borrow:", err);
+  }
+
+  // Fetch after borrow
+  const postBorrowLoan = await program.account.loan.fetch(loanPda);
+  console.log("Post-borrow Loan:", postBorrowLoan);
+
+  const postBorrowCollateralPosition = await program.account.userPosition.fetch(userAccountPda1);
+  console.log("Post-borrow Collateral Position:", postBorrowCollateralPosition);
+
+  const postBorrowMarket1 = await program.account.market.fetch(marketPda1);
+  console.log("Post-borrow Market1:", postBorrowMarket1);
+
+  const postBorrowMarket2 = await program.account.market.fetch(marketPda2);
+  console.log("Post-borrow Market2:", postBorrowMarket2);
+
+  // Repay
+  const repayAmount = new BN(2500 + 100); // Assume with interest/fee
+
+  try {
+    await program.methods
+      .repay(repayAmount)
+      .accounts({
+        borrower: wallet.publicKey,
+        mint: mockMint2,
+        loan: loanPda,
+        protocolState: protocolStatePda,
+        collateralMarket: marketPda1,
+        borrowMarket: marketPda2,
+        userPosition: userAccountPda1,
+        userTokenAccount: userTokenAccount2,
+        supplyVault: supplyVaultPda2,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .rpc();
+    console.log("Repay successful! Repaid:", repayAmount.toString());
+  } catch (err) {
+    console.error("Error during repay:", err);
+  }
+
+ // Fetch after repay (loan should be closed)
+  try {
+    const postRepayLoan = await program.account.loan.fetch(loanPda);
+    console.log("Post-repay Loan:", postRepayLoan);
+  } catch (err) {
+    console.log("Loan account closed as expected:", err);
+  }
+
+  const postRepayCollateralPosition = await program.account.userPosition.fetch(userAccountPda1);
+  console.log("Post-repay Collateral Position:", postRepayCollateralPosition);
+
+  const postRepayMarket1 = await program.account.market.fetch(marketPda1);
+  console.log("Post-repay Market1:", postRepayMarket1);
+
+  const postRepayMarket2 = await program.account.market.fetch(marketPda2);
+  console.log("Post-repay Market2:", postRepayMarket2);
+
 }
 
-main();
+main().catch((err) => console.error(err));
