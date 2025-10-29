@@ -44,6 +44,19 @@ pub mod core_router {
     ) -> Result<()> {
         handler_initialize_user_position(ctx)
     }
+    pub fn update_credit_score(
+        ctx: Context<UpdateCreditScore>,
+        user_pubkey: Pubkey,
+        new_score: u16,
+        proof_hash: [u8; 32],
+        expiry: i64,
+    ) -> Result<()> {
+        update_credit_score_handler(ctx, user_pubkey, new_score, proof_hash, expiry)
+    }
+    
+    pub fn get_credit_score(ctx: Context<GetCreditScore>) -> Result<u16> {
+        get_credit_score_handler(ctx)
+    }
 
     // pub fn initialize_loan(ctx: Context<InitializeLoan>, borrow_asset: Pubkey, collateral_asset: Pubkey) -> Result<()> {
     //     handler_initialize_loan(ctx, borrow_asset, collateral_asset)
