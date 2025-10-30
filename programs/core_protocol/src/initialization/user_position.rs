@@ -4,14 +4,6 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint,TokenInterface};
 
 
-// ============================================================================
-// INSTRUCTION 3: Create User Token Accounts (Separate for flexibility)
-// ============================================================================
-// CORRECTION: Users only need the token accounts for actions they take:
-// - Depositors only need rToken account
-// - Borrowers only need dToken account
-// - Users doing both will need both, but created separately
-
 // Create rToken account (for depositors/suppliers)
 #[derive(Accounts)]
 pub struct InitializeUserPosition<'info> {
@@ -59,18 +51,3 @@ pub fn handler_initialize_user_position(
 
     Ok(())
 }
-// pub user: Pubkey,
-// pub market: Pubkey,             // underlying market
-
-// // Deposit tracking
-// pub deposited_shares: u64,           // rToken shares owned
-// pub locked_collateral: u64,          // rToken shares locked as collateral
-
-// // Borrow tracking
-// pub borrowed_shares: u64,            // dToken shares (debt)
-
-// // Interest tracking (for accurate calculations)
-// pub deposit_index: u128,             // Last supply index when user interacted
-// pub borrow_index: u128,              // Last borrow index when user interacted
-
-// pub bump: u8,

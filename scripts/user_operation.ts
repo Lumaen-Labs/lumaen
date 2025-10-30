@@ -252,7 +252,7 @@ console.log("USDT PriceFeed account exists:", !!usdtInfo);
     withdrawFee: new BN(0),
     borrowFee: new BN(0),
     repayFee: new BN(0),
-    pythFeedId: Array.from(solFeedId), // Pass as array
+    pythFeedId: Array.from(usdtFeedId), // Pass as array
   };
 
   try {
@@ -470,15 +470,38 @@ await pythSolanaReceiver.provider.sendAll(freshVersionedTxs, { skipPreflight: tr
 console.log("Posted fresh PriceUpdates.");
 
   // Borrow: Collateral from market1 (USDC), borrow from market2 (USDT)
-const sharesAmount = new BN(500).mul(new BN(10).pow(new BN(9)));  // 500 whole shares/units
-const borrowAmount = new BN(2500).mul(new BN(10).pow(new BN(6)));  // 2500 whole tokens
+const sharesAmount1 = new BN(500).mul(new BN(10).pow(new BN(9)));  // 500 whole shares/units
+const borrowAmount1 = new BN(2500).mul(new BN(10).pow(new BN(6)));  // 2500 whole tokens
 
-  const [loanPda] = anchor.web3.PublicKey.findProgramAddressSync(
+  const [loanPda1] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("loan"), marketPda1.toBuffer(), marketPda2.toBuffer(), wallet.publicKey.toBuffer()],
     program.programId
   );
 
   try {
+    await program.methods
+      .borrow(sharesAmount1, borrowAmount1)
+      .accounts({
+        borrower: wallet.publicKey,
+        collateralMint: mockMint1,
+        borrowMint: mockMint2,
+        protocolState: protocolStatePda,
+        collateralMarket: marketPda1,
+        borrowMarket: marketPda2,
+        collateralPosition: userAccountPda1,
+        loan: loanPda1,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        priceUpdateCol: solUsdPriceFeedAccount,  // For collateral (USDC)
+        priceUpdateBorrow: usdtUsdPriceFeedAccount, // For borrow (USDT)
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .rpc();
+    console.log("Borrow successful! Borrowed:", borrowAmount.toString());
+  } catch (err) {
+    console.error("Error during borrow:", err);
+  }
+
+   try {
     await program.methods
       .borrow(sharesAmount, borrowAmount)
       .accounts({
@@ -492,7 +515,7 @@ const borrowAmount = new BN(2500).mul(new BN(10).pow(new BN(6)));  // 2500 whole
         loan: loanPda,
         tokenProgram: TOKEN_PROGRAM_ID,
         priceUpdateCol: solUsdPriceFeedAccount,  // For collateral (USDC)
-        priceUpdateBorrow: solUsdPriceFeedAccount, // For borrow (USDT)
+        priceUpdateBorrow: usdtUsdPriceFeedAccount, // For borrow (USDT)
         systemProgram: anchor.web3.SystemProgram.programId,
       } as any)
       .rpc();
